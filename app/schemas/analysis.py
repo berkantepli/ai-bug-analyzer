@@ -12,3 +12,4 @@ class BugAnalysis(BaseModel):
     possible_root_cause: str = Field(min_length=1)
     suggested_test_scenarios: list[str]
     missing_information: list[str]
+    confidence: float = Field(ge=0.0, le=1.0)

@@ -18,6 +18,7 @@ def valid_analysis_data() -> dict:
             "Maximum allowed file size",
             "Supported image formats",
         ],
+        "confidence": 0.9,
     }
 
 

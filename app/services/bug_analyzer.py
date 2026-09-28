@@ -114,4 +114,5 @@ def analyze_bug_report(bug: BugReportCreate) -> BugAnalysis:
         possible_root_cause=possible_root_cause,
         suggested_test_scenarios=suggested_test_scenarios,
         missing_information=missing_information,
+        confidence=0.9,
     )
