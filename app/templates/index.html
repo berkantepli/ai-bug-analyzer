@@ -234,6 +234,10 @@
             background: var(--danger);
         }
 
+        .status-dot.checking {
+            background: #f59e0b;
+        }
+
         .service-text {
             color: var(--text);
         }
@@ -834,7 +838,7 @@
                 <div class="field">
                     <label for="screenshot">
                         Screenshot
-                        <span class="optional">(Optional)</span>
+                        <span style="color: var(--muted); font-weight: 500;">(Optional)</span>
                     </label>
 
                     <div class="screenshot-upload">
@@ -1288,6 +1292,10 @@
          */
 
         async function checkServiceStatus() {
+            statusDot.classList.remove("unavailable");
+            statusDot.classList.add("checking");
+            serviceValue.textContent = "Checking...";
+
             try {
                 const response = await fetch("/health", {
                     method: "GET",
@@ -1298,10 +1306,11 @@
                     throw new Error("Service unavailable");
                 }
 
-                statusDot.classList.remove("unavailable");
+                statusDot.classList.remove("checking", "unavailable");
                 serviceValue.textContent = "Available";
 
             } catch {
+                statusDot.classList.remove("checking");
                 statusDot.classList.add("unavailable");
                 serviceValue.textContent = "Unavailable";
             }
