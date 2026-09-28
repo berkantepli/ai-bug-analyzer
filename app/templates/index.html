@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI Bug Analyzer</title>
+
+    <style>
+        :root {
+            --bg: #f5f7fb;
+            --surface: #ffffff;
+            --surface-soft: #f8fafc;
+            --border: #dbe1ea;
+            --text: #111827;
+            --text-secondary: #64748b;
+            --placeholder: #94a3b8;
+
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+
+            --success: #16a34a;
+            --success-bg: rgba(22, 163, 74, 0.08);
+
+            --danger: #dc2626;
+            --danger-bg: rgba(220, 38, 38, 0.08);
+
+            --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+            --logo-shadow: 0 8px 24px rgba(37, 99, 235, 0.18);
+        }
+
+        html.dark {
+            --bg: #0d0f14;
+            --surface: #171a21;
+            --surface-soft: #1b1f27;
+            --border: #2d3440;
+            --text: #f3f4f6;
+            --text-secondary: #a8b0bf;
+            --placeholder: #7f8999;
+
+            --primary: #2563eb;
+            --primary-hover: #3b82f6;
+
+            --success: #22c55e;
+            --success-bg: rgba(34, 197, 94, 0.08);
+
+            --danger: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.08);
+
+            --shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+            --logo-shadow: 0 8px 28px rgba(37, 99, 235, 0.22);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            transition:
+                background-color 0.2s ease,
+                color 0.2s ease;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+
+            background: var(--bg);
+            color: var(--text);
+
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                Roboto,
+                Helvetica,
+                Arial,
+                sans-serif;
+
+            transition:
+                background-color 0.2s ease,
+                color 0.2s ease;
+        }
+
+        button,
+        input,
+        textarea {
+            font: inherit;
+        }
+
+        .page {
+            width: 100%;
+            max-width: 900px;
+
+            margin: 0 auto;
+            padding: 28px 20px 50px;
+        }
+
+        /* =========================
+           HEADER
+        ========================= */
+
+        .header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            min-width: 0;
+        }
+
+        .logo {
+            width: 64px;
+            height: 64px;
+
+            flex: 0 0 64px;
+
+            object-fit: contain;
+            display: block;
+
+            border-radius: 16px;
+
+            box-shadow: var(--logo-shadow);
+
+            background: transparent;
+        }
+
+        .brand-text {
+            min-width: 0;
+        }
+
+        .brand-title {
+            margin: 0;
+
+            font-size: 30px;
+            line-height: 1.15;
+            font-weight: 750;
+            letter-spacing: -0.8px;
+
+            color: var(--text);
+        }
+
+        .brand-subtitle {
+            margin: 7px 0 0;
+
+            color: var(--text-secondary);
+
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        /* =========================
+           THEME SWITCH
+        ========================= */
+
+        .theme-switch {
+            position: relative;
+
+            width: 68px;
+            height: 36px;
+
+            flex: 0 0 68px;
+
+            border: 1px solid var(--border);
+            border-radius: 999px;
+
+            background: var(--surface);
+
+            cursor: pointer;
+
+            padding: 0;
+
+            transition:
+                background-color 0.2s ease,
+                border-color 0.2s ease,
+                transform 0.15s ease;
+        }
+
+        .theme-switch:hover {
+            transform: translateY(-1px);
+        }
+
+        .theme-switch:focus-visible {
+            outline: 3px solid rgba(37, 99, 235, 0.18);
+            outline-offset: 2px;
+        }
+
+        .theme-switch::before {
+            content: "";
+
+            position: absolute;
+
+            top: 4px;
+            left: 4px;
+
+            width: 26px;
+            height: 26px;
+
+            border-radius: 50%;
+
+            background: var(--surface-soft);
+
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+
+            transition:
+                transform 0.2s ease,
+                background-color 0.2s ease;
+        }
+
+        html.dark .theme-switch::before {
+            transform: translateX(32px);
+        }
+
+        .theme-icon {
+            position: absolute;
+            top: 50%;
+
+            transform: translateY(-50%);
+
+            width: 16px;
+            height: 16px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            font-size: 13px;
+
+            pointer-events: none;
+
+            z-index: 2;
+        }
+
+        .sun {
+            left: 9px;
+        }
+
+        .moon {
+            right: 9px;
+        }
+
+        /* =========================
+           SERVICE STATUS
+        ========================= */
+
+        .service-status {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            min-height: 44px;
+
+            padding: 0 14px;
+
+            margin-bottom: 20px;
+
+            border: 1px solid var(--border);
+            border-radius: 10px;
+
+            background: var(--surface);
+
+            transition:
+                background-color 0.2s ease,
+                border-color 0.2s ease;
+        }
+
+        .service-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+
+            font-size: 13px;
+            font-weight: 650;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+
+            border-radius: 50%;
+
+            background: var(--success);
+
+            box-shadow:
+                0 0 0 4px var(--success-bg);
+        }
+
+        .status-dot.offline {
+            background: var(--danger);
+
+            box-shadow:
+                0 0 0 4px var(--danger-bg);
+        }
+
+        .status-text {
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .service-message {
+            display: none;
+
+            margin-top: -10px;
+            margin-bottom: 20px;
+
+            padding: 10px 13px;
+
+            border-radius: 8px;
+
+            background: var(--danger-bg);
+            color: var(--danger);
+
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .service-message.visible {
+            display: block;
+        }
+
+        /* =========================
+           FORM CARD
+        ========================= */
+
+        .card {
+            background: var(--surface);
+
+            border: 1px solid var(--border);
+            border-radius: 18px;
+
+            padding: 30px;
+
+            box-shadow: var(--shadow);
+
+            transition:
+                background-color 0.2s ease,
+                border-color 0.2s ease;
+        }
+
+        .field {
+            margin-bottom: 25px;
+        }
+
+        .field:last-of-type {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+
+            margin-bottom: 9px;
+
+            font-size: 13px;
+            font-weight: 700;
+
+            color: var(--text);
+        }
+
+        input,
+        textarea {
+            width: 100%;
+
+            border: 1px solid var(--border);
+            border-radius: 10px;
+
+            background: var(--surface-soft);
+            color: var(--text);
+
+            outline: none;
+
+            transition:
+                border-color 0.15s ease,
+                box-shadow 0.15s ease,
+                background-color 0.2s ease;
+        }
+
+        input {
+            height: 48px;
+            padding: 0 14px;
+        }
+
+        textarea {
+            min-height: 110px;
+
+            padding: 14px;
+
+            resize: vertical;
+
+            line-height: 1.5;
+        }
+
+        textarea.steps {
+            min-height: 125px;
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+            color: var(--placeholder);
+        }
+
+        input:hover,
+        textarea:hover {
+            border-color: #b7c0ce;
+        }
+
+        html.dark input:hover,
+        html.dark textarea:hover {
+            border-color: #414a58;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: var(--primary);
+
+            box-shadow:
+                0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        /* =========================
+           CUSTOM VALIDATION
+        ========================= */
+
+        .field-error {
+            display: none;
+
+            margin-top: 7px;
+
+            font-size: 12px;
+            line-height: 1.4;
+
+            color: var(--danger);
+        }
+
+        .field-error.visible {
+            display: block;
+        }
+
+        input.input-error,
+        textarea.input-error {
+            border-color: var(--danger) !important;
+
+            box-shadow:
+                0 0 0 3px var(--danger-bg) !important;
+        }
+
+        /* =========================
+           BUTTONS
+        ========================= */
+
+        .actions {
+            margin-top: 6px;
+        }
+
+        .clear-button {
+            display: flex;
+
+            align-items: center;
+            justify-content: center;
+
+            width: 100%;
+
+            border: 0;
+            background: transparent;
+
+            color: var(--text-secondary);
+
+            font-size: 13px;
+            font-weight: 600;
+
+            cursor: pointer;
+
+            padding: 7px 0;
+            margin-bottom: 10px;
+
+            text-align: center;
+
+            transition:
+                color 0.15s ease;
+        }
+
+        .clear-button:hover {
+            color: var(--text);
+        }
+
+        .analyze-button {
+            width: 100%;
+            height: 48px;
+
+            border: 0;
+            border-radius: 9px;
+
+            background: var(--primary);
+            color: #ffffff;
+
+            font-size: 14px;
+            font-weight: 700;
+
+            cursor: pointer;
+
+            transition:
+                background-color 0.15s ease,
+                transform 0.15s ease,
+                opacity 0.15s ease;
+        }
+
+        .analyze-button:hover:not(:disabled) {
+            background: var(--primary-hover);
+
+            transform: translateY(-1px);
+        }
+
+        .analyze-button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .analyze-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.65;
+        }
+
+        /* =========================
+           ANALYSIS RESULT
+        ========================= */
+
+        .result {
+            display: none;
+
+            margin-top: 22px;
+
+            border: 1px solid var(--border);
+            border-radius: 14px;
+
+            background: var(--surface);
+
+            padding: 22px;
+        }
+
+        .result.visible {
+            display: block;
+        }
+
+        .result-title {
+            margin: 0 0 16px;
+
+            font-size: 18px;
+            font-weight: 750;
+        }
+
+        .result-grid {
+            display: grid;
+
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+
+            gap: 12px;
+        }
+
+        .result-item {
+            padding: 14px;
+
+            border: 1px solid var(--border);
+            border-radius: 10px;
+
+            background: var(--surface-soft);
+        }
+
+        .result-label {
+            margin-bottom: 6px;
+
+            color: var(--text-secondary);
+
+            font-size: 11px;
+            font-weight: 700;
+
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .result-value {
+            color: var(--text);
+
+            font-size: 14px;
+            line-height: 1.5;
+
+            white-space: pre-wrap;
+        }
+
+        /* =========================
+           RESPONSIVE
+        ========================= */
+
+        @media (max-width: 700px) {
+            .page {
+                padding: 20px 14px 35px;
+            }
+
+            .header {
+                align-items: flex-start;
+            }
+
+            .brand {
+                gap: 13px;
+            }
+
+            .logo {
+                width: 54px;
+                height: 54px;
+                flex-basis: 54px;
+
+                border-radius: 14px;
+            }
+
+            .brand-title {
+                font-size: 24px;
+            }
+
+            .brand-subtitle {
+                font-size: 13px;
+            }
+
+            .theme-switch {
+                width: 62px;
+                height: 34px;
+                flex-basis: 62px;
+            }
+
+            html.dark .theme-switch::before {
+                transform: translateX(28px);
+            }
+
+            .card {
+                padding: 22px 18px;
+                border-radius: 15px;
+            }
+
+            .result-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="page">
+
+        <!-- =========================
+         HEADER
+    ========================== -->
+
+        <header class="header">
+
+            <div class="brand">
+
+                <img class="logo" src="/static/images/logo.png" alt="AI Bug Analyzer logo">
+
+                <div class="brand-text">
+
+                    <h1 class="brand-title">
+                        AI Bug Analyzer
+                    </h1>
+
+                    <p class="brand-subtitle">
+                        Analyze your bug report and generate structured QA insights.
+                    </p>
+
+                </div>
+
+            </div>
+
+            <button type="button" class="theme-switch" id="themeToggle" aria-label="Switch theme"
+                title="Switch between light and dark mode">
+                <span class="theme-icon sun">☀</span>
+                <span class="theme-icon moon">☾</span>
+            </button>
+
+        </header>
+
+
+        <!-- =========================
+         SERVICE STATUS
+    ========================== -->
+
+        <div class="service-status">
+
+            <div class="service-left">
+
+                <span class="status-dot" id="statusDot"></span>
+
+                <span>
+                    Analysis service
+                </span>
+
+            </div>
+
+            <span class="status-text" id="statusText">
+                Checking...
+            </span>
+
+        </div>
+
+        <div class="service-message" id="serviceMessage">
+            The analysis service is currently unavailable.
+            Please try again later.
+        </div>
+
+
+        <!-- =========================
+         FORM
+    ========================== -->
+
+        <form class="card" id="bugForm" novalidate>
+
+            <!-- Bug Title -->
+
+            <div class="field">
+
+                <label for="title">
+                    Bug Title
+                </label>
+
+                <input type="text" id="title" name="title" placeholder="e.g. App crashes when uploading a large image"
+                    autocomplete="off">
+
+                <div class="field-error" id="titleError"></div>
+
+            </div>
+
+
+            <!-- Description -->
+
+            <div class="field">
+
+                <label for="description">
+                    Description
+                </label>
+
+                <textarea id="description" name="description"
+                    placeholder="Describe the bug and provide any relevant context..."></textarea>
+
+                <div class="field-error" id="descriptionError"></div>
+
+            </div>
+
+
+            <!-- Steps -->
+
+            <div class="field">
+
+                <label for="steps">
+                    Steps to Reproduce
+                </label>
+
+                <textarea class="steps" id="steps" name="steps_to_reproduce"
+                    placeholder="1. Open the application&#10;2. Select a large image&#10;3. Tap Upload"></textarea>
+
+                <div class="field-error" id="stepsError"></div>
+
+            </div>
+
+
+            <!-- Expected Result -->
+
+            <div class="field">
+
+                <label for="expected">
+                    Expected Result
+                </label>
+
+                <textarea id="expected" name="expected_result" placeholder="What should happen?"></textarea>
+
+                <div class="field-error" id="expectedError"></div>
+
+            </div>
+
+
+            <!-- Actual Result -->
+
+            <div class="field">
+
+                <label for="actual">
+                    Actual Result
+                </label>
+
+                <textarea id="actual" name="actual_result" placeholder="What actually happens?"></textarea>
+
+                <div class="field-error" id="actualError"></div>
+
+            </div>
+
+
+            <!-- Actions -->
+
+            <div class="actions">
+
+                <button type="button" class="clear-button" id="clearButton">
+                    Clear
+                </button>
+
+                <button type="submit" class="analyze-button" id="analyzeButton">
+                    Analyze Bug
+                </button>
+
+            </div>
+
+        </form>
+
+
+        <!-- =========================
+         RESULT
+    ========================== -->
+
+        <section class="result" id="result">
+
+            <h2 class="result-title">
+                Analysis Result
+            </h2>
+
+            <div class="result-grid" id="resultGrid"></div>
+
+        </section>
+
+    </div>
+
+
+    <script>
+
+        /* =========================================================
+           THEME
+        ========================================================= */
+
+        const themeToggle = document.getElementById("themeToggle");
+
+        function applyTheme(theme) {
+            if (theme === "dark") {
+                document.documentElement.classList.add("dark");
+            } else {
+                document.documentElement.classList.remove("dark");
+            }
+        }
+
+        const savedTheme = localStorage.getItem("theme");
+
+        if (savedTheme) {
+            applyTheme(savedTheme);
+        } else {
+            const prefersDark = window.matchMedia(
+                "(prefers-color-scheme: dark)"
+            ).matches;
+
+            applyTheme(prefersDark ? "dark" : "light");
+        }
+
+        themeToggle.addEventListener("click", function () {
+
+            const isDark =
+                document.documentElement.classList.contains("dark");
+
+            const newTheme = isDark ? "light" : "dark";
+
+            applyTheme(newTheme);
+
+            localStorage.setItem("theme", newTheme);
+        });
+
+
+        /* =========================================================
+           SERVICE STATUS
+        ========================================================= */
+
+        const statusDot = document.getElementById("statusDot");
+        const statusText = document.getElementById("statusText");
+        const serviceMessage = document.getElementById("serviceMessage");
+
+        const analyzeButton =
+            document.getElementById("analyzeButton");
+
+
+        async function checkServiceStatus() {
+
+            try {
+
+                const response = await fetch(
+                    "/health",
+                    {
+                        method: "GET",
+                        cache: "no-store"
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error("Health check failed");
+                }
+
+                const data = await response.json();
+
+                if (data.status === "ok") {
+
+                    statusDot.classList.remove("offline");
+
+                    statusText.textContent = "Available";
+
+                    serviceMessage.classList.remove("visible");
+
+                    analyzeButton.disabled = false;
+
+                } else {
+
+                    setServiceUnavailable();
+                }
+
+            } catch (error) {
+
+                setServiceUnavailable();
+            }
+        }
+
+
+        function setServiceUnavailable() {
+
+            statusDot.classList.add("offline");
+
+            statusText.textContent = "Unavailable";
+
+            serviceMessage.classList.add("visible");
+
+            analyzeButton.disabled = true;
+        }
+
+
+        checkServiceStatus();
+
+
+        /* =========================================================
+           VALIDATION
+        ========================================================= */
+
+        const fields = [
+            {
+                input: document.getElementById("title"),
+                error: document.getElementById("titleError"),
+                message: "Please enter a bug title."
+            },
+            {
+                input: document.getElementById("description"),
+                error: document.getElementById("descriptionError"),
+                message: "Please describe the bug."
+            },
+            {
+                input: document.getElementById("steps"),
+                error: document.getElementById("stepsError"),
+                message: "Please provide the steps to reproduce."
+            },
+            {
+                input: document.getElementById("expected"),
+                error: document.getElementById("expectedError"),
+                message: "Please describe the expected result."
+            },
+            {
+                input: document.getElementById("actual"),
+                error: document.getElementById("actualError"),
+                message: "Please describe the actual result."
+            }
+        ];
+
+
+        function clearFieldError(field) {
+
+            field.input.classList.remove("input-error");
+
+            field.error.textContent = "";
+
+            field.error.classList.remove("visible");
+        }
+
+
+        function showFieldError(field) {
+
+            field.input.classList.add("input-error");
+
+            field.error.textContent = field.message;
+
+            field.error.classList.add("visible");
+        }
+
+
+        function validateForm() {
+
+            let valid = true;
+
+            let firstInvalidField = null;
+
+            fields.forEach(function (field) {
+
+                const value = field.input.value.trim();
+
+                if (!value) {
+
+                    showFieldError(field);
+
+                    valid = false;
+
+                    if (!firstInvalidField) {
+                        firstInvalidField = field.input;
+                    }
+
+                } else {
+
+                    clearFieldError(field);
+                }
+
+            });
+
+
+            if (firstInvalidField) {
+
+                firstInvalidField.focus();
+
+            }
+
+            return valid;
+        }
+
+
+        /*
+         * Remove validation error as soon as the user starts
+         * correcting the field.
+         */
+
+        fields.forEach(function (field) {
+
+            field.input.addEventListener(
+                "input",
+                function () {
+
+                    if (field.input.value.trim()) {
+                        clearFieldError(field);
+                    }
+
+                }
+            );
+
+        });
+
+
+        /* =========================================================
+           CLEAR
+        ========================================================= */
+
+        const clearButton =
+            document.getElementById("clearButton");
+
+        const bugForm =
+            document.getElementById("bugForm");
+
+        const result =
+            document.getElementById("result");
+
+        const resultGrid =
+            document.getElementById("resultGrid");
+
+
+        clearButton.addEventListener("click", function () {
+
+            bugForm.reset();
+
+            fields.forEach(function (field) {
+                clearFieldError(field);
+            });
+
+            result.classList.remove("visible");
+
+            resultGrid.innerHTML = "";
+
+        });
+
+
+        /* =========================================================
+           ANALYZE BUG
+        ========================================================= */
+
+        bugForm.addEventListener(
+            "submit",
+            async function (event) {
+
+                event.preventDefault();
+
+
+                /*
+                 * First validate manually.
+                 * Because the form uses novalidate,
+                 * Chrome will not show its Turkish native
+                 * validation message.
+                 */
+
+                if (!validateForm()) {
+                    return;
+                }
+
+
+                /*
+                 * Don't allow analysis when the service
+                 * is unavailable.
+                 */
+
+                if (analyzeButton.disabled) {
+                    return;
+                }
+
+
+                analyzeButton.disabled = true;
+
+                analyzeButton.textContent = "Analyzing...";
+
+
+                const payload = {
+
+                    title:
+                        document.getElementById("title").value.trim(),
+
+                    description:
+                        document.getElementById("description").value.trim(),
+
+                    steps_to_reproduce:
+                        document.getElementById("steps").value.trim(),
+
+                    expected_result:
+                        document.getElementById("expected").value.trim(),
+
+                    actual_result:
+                        document.getElementById("actual").value.trim()
+
+                };
+
+
+                try {
+
+                    const response = await fetch(
+                        "/bugs/analyze",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+
+                            body: JSON.stringify(payload)
+                        }
+                    );
+
+
+                    if (!response.ok) {
+
+                        let errorMessage =
+                            "Unable to analyze the bug.";
+
+                        try {
+
+                            const errorData =
+                                await response.json();
+
+                            if (errorData.detail) {
+                                errorMessage =
+                                    errorData.detail;
+                            }
+
+                        } catch (_) {
+                            // Ignore JSON parsing errors.
+                        }
+
+                        throw new Error(errorMessage);
+                    }
+
+
+                    const data =
+                        await response.json();
+
+
+                    showAnalysisResult(data);
+
+
+                } catch (error) {
+
+                    showAnalysisError(
+                        error.message ||
+                        "Something went wrong while analyzing the bug."
+                    );
+
+                } finally {
+
+                    analyzeButton.disabled = false;
+
+                    analyzeButton.textContent =
+                        "Analyze Bug";
+                }
+
+            }
+        );
+
+
+        /* =========================================================
+           RESULT
+        ========================================================= */
+
+        function showAnalysisResult(data) {
+
+            resultGrid.innerHTML = "";
+
+
+            /*
+             * Display the fields dynamically so the UI
+             * can work with the current BugAnalysis schema.
+             */
+
+            const ignoredFields = [
+                "id",
+                "created_at"
+            ];
+
+
+            Object.entries(data).forEach(
+                function ([key, value]) {
+
+                    if (ignoredFields.includes(key)) {
+                        return;
+                    }
+
+
+                    const item =
+                        document.createElement("div");
+
+                    item.className = "result-item";
+
+
+                    const label =
+                        document.createElement("div");
+
+                    label.className = "result-label";
+
+                    label.textContent =
+                        formatLabel(key);
+
+
+                    const resultValue =
+                        document.createElement("div");
+
+                    resultValue.className = "result-value";
+
+                    if (
+                        typeof value === "object" &&
+                        value !== null
+                    ) {
+
+                        resultValue.textContent =
+                            JSON.stringify(
+                                value,
+                                null,
+                                2
+                            );
+
+                    } else {
+
+                        resultValue.textContent =
+                            String(value ?? "—");
+                    }
+
+
+                    item.appendChild(label);
+
+                    item.appendChild(resultValue);
+
+                    resultGrid.appendChild(item);
+
+                }
+            );
+
+
+            result.classList.add("visible");
+
+
+            result.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+
+        }
+
+
+        function formatLabel(value) {
+
+            return value
+                .replace(/_/g, " ")
+                .replace(/\b\w/g, function (letter) {
+                    return letter.toUpperCase();
+                });
+
+        }
+
+
+        function showAnalysisError(message) {
+
+            resultGrid.innerHTML = "";
+
+
+            const item =
+                document.createElement("div");
+
+            item.className = "result-item";
+
+
+            const label =
+                document.createElement("div");
+
+            label.className = "result-label";
+
+            label.textContent =
+                "Analysis Error";
+
+
+            const value =
+                document.createElement("div");
+
+            value.className = "result-value";
+
+            value.textContent =
+                message;
+
+
+            item.appendChild(label);
+
+            item.appendChild(value);
+
+            resultGrid.appendChild(item);
+
+            result.classList.add("visible");
+
+        }
+
+    </script>
+
+</body>
+
+</html>
