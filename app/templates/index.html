@@ -93,8 +93,8 @@
         }
 
         .logo {
-            width: 58px;
-            height: 58px;
+            width: 64px;
+            height: 64px;
             object-fit: contain;
             display: block;
             flex-shrink: 0;
@@ -557,8 +557,8 @@
             }
 
             .logo {
-                width: 48px;
-                height: 48px;
+                width: 64px;
+                height: 64px;
             }
 
             .brand-text h1 {
@@ -579,8 +579,8 @@
         }
 
         /* =========================
-   RESULT INFO TOOLTIPS
-========================== */
+            RESULT INFO TOOLTIPS
+        ========================== */
 
         .result-label {
             display: flex;
@@ -677,6 +677,54 @@
 
             transform:
                 translateX(-50%) translateY(0);
+        }
+
+        /* =========================
+            SCREENSHOT UPLOAD
+        ========================== */
+
+        .screenshot-upload {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .screenshot-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            padding: 9px 14px;
+
+            border: 1px solid var(--border);
+            border-radius: 8px;
+
+            background: var(--card);
+            color: var(--text);
+
+            font-size: 13px;
+            font-weight: 600;
+
+            cursor: pointer;
+
+            transition:
+                border-color 0.15s ease,
+                background-color 0.15s ease;
+        }
+
+        .screenshot-button:hover {
+            border-color: var(--primary);
+            background: rgba(47, 109, 246, 0.08);
+        }
+
+        .screenshot-file-name {
+            color: var(--muted);
+            font-size: 13px;
+
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
     </style>
 </head>
@@ -782,6 +830,27 @@
                     </div>
                 </div>
 
+                <!-- Screenshot (Optional) -->
+                <div class="field">
+                    <label for="screenshot">
+                        Screenshot
+                        <span class="optional">(Optional)</span>
+                    </label>
+
+                    <div class="screenshot-upload">
+                        <label for="screenshot" class="screenshot-button">
+                            📎 Choose Screenshot
+                        </label>
+
+                        <input type="file" id="screenshot" name="screenshot"
+                            accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" hidden>
+
+                        <span id="screenshot-file-name" class="screenshot-file-name">
+                            No file chosen
+                        </span>
+                    </div>
+                </div>
+
                 <div class="clear-wrapper">
                     <button id="clearButton" class="clear-button" type="button">
                         Clear
@@ -827,6 +896,23 @@
 
         const statusDot = document.getElementById("statusDot");
         const serviceValue = document.getElementById("serviceValue");
+
+        /* =========================
+            Screenshot Upload
+        ========================== */
+
+        const screenshotInput = document.getElementById("screenshot");
+        const screenshotFileName = document.getElementById("screenshot-file-name");
+
+        screenshotInput.addEventListener("change", () => {
+            const file = screenshotInput.files[0];
+
+            if (file) {
+                screenshotFileName.textContent = file.name;
+            } else {
+                screenshotFileName.textContent = "No file chosen";
+            }
+        });
 
         /*
          * Theme
@@ -1189,6 +1275,10 @@
             bugForm.reset();
             clearValidation();
             clearResults();
+
+            // Clear screenshot
+            screenshotInput.value = "";
+            screenshotFileName.textContent = "No file chosen";
 
             fields.bugTitle.input.focus();
         });
