@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from typing import Optional
+
 
 class BugAnalysis(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -13,3 +15,4 @@ class BugAnalysis(BaseModel):
     suggested_test_scenarios: list[str]
     missing_information: list[str]
     confidence: float = Field(ge=0.0, le=1.0)
+    visual_evidence: Optional[str] = None

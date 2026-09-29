@@ -657,6 +657,40 @@
             word-break: break-word;
         }
 
+        .visual-evidence-section {
+            margin-top: 12px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--card-secondary);
+        }
+
+        .visual-evidence-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 7px;
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.7px;
+            text-transform: uppercase;
+        }
+
+        .visual-evidence-label::before {
+            content: "◉";
+            color: var(--primary);
+            font-size: 9px;
+        }
+
+        .visual-evidence-value {
+            color: var(--text);
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
         /* Error */
 
         .error-card {
@@ -1223,8 +1257,16 @@
             </div>
 
             <section id="resultCard" class="result-card">
+
                 <h2 id="resultHeading">Analysis Result</h2>
+
                 <div id="resultGrid" class="result-grid"></div>
+
+                <div id="visualEvidenceSection" class="visual-evidence-section" hidden>
+                    <div class="visual-evidence-label">Visual Evidence</div>
+                    <div id="visualEvidenceValue" class="visual-evidence-value"></div>
+                </div>
+
             </section>
 
             <section id="errorCard" class="error-card">
@@ -1248,6 +1290,8 @@
 
         const resultCard = document.getElementById("resultCard");
         const resultGrid = document.getElementById("resultGrid");
+        const visualEvidenceSection = document.getElementById("visualEvidenceSection");
+        const visualEvidenceValue = document.getElementById("visualEvidenceValue");
         const resultHeading = document.getElementById("resultHeading");
 
         const errorCard = document.getElementById("errorCard");
@@ -1577,6 +1621,9 @@
             resultGrid.innerHTML = "";
             resultHeading.textContent = "Analysis Result";
 
+            visualEvidenceSection.hidden = true;
+            visualEvidenceValue.textContent = "";
+
             errorCard.classList.remove("visible");
             errorMessage.textContent = "";
             resultContext = null;
@@ -1621,10 +1668,11 @@
                     : data;
 
             const entries = Object.entries(analysis).filter(
-                ([key]) => key !== "confidence"
+                ([key]) => key !== "confidence" && key !== "visual_evidence"
             );
 
             const confidence = analysis.confidence;
+            const visualEvidence = analysis.visual_evidence;
 
             if (confidence !== undefined && confidence !== null) {
                 const confidenceBadge = document.createElement("span");
@@ -1664,7 +1712,7 @@
                 label.className = "result-label";
 
                 const labelText = document.createElement("span");
-                labelText.textContent = key.replace(/\_/g, " ");
+                labelText.textContent = key.replace(/_/g, " ");
 
                 label.appendChild(labelText);
 
@@ -1686,7 +1734,6 @@
 
                     missing_information:
                         "Important details that are missing from the bug report and could help QA investigate, reproduce, or validate the issue more effectively.",
-
                 };
 
                 const tooltipText = tooltipTexts[key];
@@ -1711,6 +1758,15 @@
 
                 resultGrid.appendChild(item);
             });
+
+            if (
+                visualEvidence !== null &&
+                visualEvidence !== undefined &&
+                String(visualEvidence).trim()
+            ) {
+                visualEvidenceValue.textContent = visualEvidence;
+                visualEvidenceSection.hidden = false;
+            }
 
             resultCard.classList.add("visible");
             resultContext = { mode: "single", type: "result" };
