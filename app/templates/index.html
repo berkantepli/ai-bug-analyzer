@@ -26,6 +26,22 @@
             --danger-bg: rgba(239, 68, 68, 0.04);
             --input-focus: #3b82f6;
             --shadow: rgba(0, 0, 0, 0.25);
+            --summary-chip-bg: #252b36;
+            --summary-chip-border: #3a4352;
+            --summary-count-bg: #3a4352;
+            --summary-count-text: #f4f7fb;
+            --critical-bg: rgba(239, 68, 68, 0.16);
+            --critical-border: rgba(248, 113, 113, 0.45);
+            --critical-text: #fca5a5;
+            --high-bg: rgba(249, 115, 22, 0.16);
+            --high-border: rgba(251, 146, 60, 0.45);
+            --high-text: #fdba74;
+            --medium-bg: rgba(234, 179, 8, 0.16);
+            --medium-border: rgba(250, 204, 21, 0.45);
+            --medium-text: #fde047;
+            --low-bg: rgba(34, 197, 94, 0.16);
+            --low-border: rgba(74, 222, 128, 0.45);
+            --low-text: #86efac;
         }
 
         body.light {
@@ -43,6 +59,22 @@
             --danger-bg: rgba(220, 38, 38, 0.035);
             --input-focus: #2864e8;
             --shadow: rgba(30, 50, 80, 0.08);
+            --summary-chip-bg: #eef2f7;
+            --summary-chip-border: #d5ddea;
+            --summary-count-bg: #dce5f2;
+            --summary-count-text: #24344d;
+            --critical-bg: #fef2f2;
+            --critical-border: #fecaca;
+            --critical-text: #b91c1c;
+            --high-bg: #fff7ed;
+            --high-border: #fed7aa;
+            --high-text: #c2410c;
+            --medium-bg: #fefce8;
+            --medium-border: #fde68a;
+            --medium-text: #a16207;
+            --low-bg: #f0fdf4;
+            --low-border: #bbf7d0;
+            --low-text: #15803d;
         }
 
         html {
@@ -529,6 +561,78 @@
             gap: 12px;
         }
 
+        .batch-summary {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .batch-summary-heading {
+            grid-column: 1 / -1;
+            margin: 0;
+            font-size: 15px;
+        }
+
+        .summary-chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .summary-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 30px;
+            padding: 4px 5px 4px 10px;
+            border: 1px solid var(--summary-chip-border);
+            border-radius: 999px;
+            background: var(--summary-chip-bg);
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .summary-chip-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            border-radius: 999px;
+            background: var(--summary-count-bg);
+            color: var(--summary-count-text);
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .summary-chip.severity-critical {
+            border-color: var(--critical-border);
+            background: var(--critical-bg);
+            color: var(--critical-text);
+        }
+
+        .summary-chip.severity-high {
+            border-color: var(--high-border);
+            background: var(--high-bg);
+            color: var(--high-text);
+        }
+
+        .summary-chip.severity-medium {
+            border-color: var(--medium-border);
+            background: var(--medium-bg);
+            color: var(--medium-text);
+        }
+
+        .summary-chip.severity-low {
+            border-color: var(--low-border);
+            background: var(--low-bg);
+            color: var(--low-text);
+        }
+
         .result-item {
             padding: 15px;
             border: 1px solid var(--border);
@@ -668,6 +772,10 @@
             }
 
             .result-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .batch-summary {
                 grid-template-columns: 1fr;
             }
         }
@@ -1005,8 +1113,46 @@
                 </button>
             </form>
 
+            <div id="batchAnalysis" class="batch-analysis form-card">
+
+                <div class="batch-upload-box">
+
+                    <div class="batch-upload-title">
+                        Upload Bug Reports
+                    </div>
+
+                    <div class="batch-upload-text">
+                        Select an Excel file containing your bug reports.
+                    </div>
+
+                    <label for="batchFileInput" class="batch-file-button">
+                        Choose File
+                    </label>
+
+                    <input type="file" id="batchFileInput" class="batch-file-input" accept=".xlsx,.xls">
+
+                    <div id="batchFileName" class="batch-file-name">
+                        No file chosen
+                    </div>
+
+                    <div class="batch-supported">
+                        Supported: .xlsx, .xls
+                    </div>
+
+                </div>
+                <div class="clear-wrapper">
+                    <button id="batchClearButton" class="clear-button" type="button">
+                        Clear
+                    </button>
+                </div>
+
+                <button id="batchAnalyzeButton" class="analyze-button" type="button" disabled>
+                    Analyze Bugs
+                </button>
+            </div>
+
             <section id="resultCard" class="result-card">
-                <h2>Analysis Result</h2>
+                <h2 id="resultHeading">Analysis Result</h2>
                 <div id="resultGrid" class="result-grid"></div>
             </section>
 
@@ -1021,44 +1167,6 @@
                     <pre id="errorMessage" class="error-message"></pre>
                 </div>
             </section>
-
-            <div id="batchAnalysis" class="batch-analysis form-card">
-
-                <div class="batch-upload-box">
-
-                    <div class="batch-upload-title">
-                        Upload Bug Reports
-                    </div>
-
-                    <div class="batch-upload-text">
-                        Select an Excel or PDF file containing your bug reports.
-                    </div>
-
-                    <label for="batchFileInput" class="batch-file-button">
-                        Choose File
-                    </label>
-
-                    <input type="file" id="batchFileInput" class="batch-file-input" accept=".xlsx,.xls,.pdf">
-
-                    <div id="batchFileName" class="batch-file-name">
-                        No file chosen
-                    </div>
-
-                    <div class="batch-supported">
-                        Supported: .xlsx, .xls, .pdf
-                    </div>
-
-                </div>
-                <div class="clear-wrapper">
-                    <button id="batchClearButton" class="clear-button" type="button">
-                        Clear
-                    </button>
-                </div>
-
-                <button id="batchAnalyzeButton" class="analyze-button" type="button" disabled>
-                    Analyze Bugs
-                </button>
-            </div>
         </main>
     </div>
 
@@ -1069,6 +1177,7 @@
 
         const resultCard = document.getElementById("resultCard");
         const resultGrid = document.getElementById("resultGrid");
+        const resultHeading = document.getElementById("resultHeading");
 
         const errorCard = document.getElementById("errorCard");
         const errorMessage = document.getElementById("errorMessage");
@@ -1082,11 +1191,11 @@
         const batchAnalysisMode = document.getElementById("batchAnalysisMode");
 
         const batchAnalysis = document.getElementById("batchAnalysis");
-        const batchActions = document.getElementById("batchActions");
         const batchFileInput = document.getElementById("batchFileInput");
         const batchFileName = document.getElementById("batchFileName");
         const batchClearButton = document.getElementById("batchClearButton");
         const batchAnalyzeButton = document.getElementById("batchAnalyzeButton");
+        let resultContext = null;
 
         singleBugMode.addEventListener("click", () => {
             singleBugMode.classList.add("active");
@@ -1094,7 +1203,7 @@
 
             bugForm.style.display = "";
             batchAnalysis.style.display = "none";
-            batchActions.style.display = "none";
+            showResultsFor("single");
         });
 
         batchAnalysisMode.addEventListener("click", () => {
@@ -1103,7 +1212,7 @@
 
             bugForm.style.display = "none";
             batchAnalysis.style.display = "block";
-            batchActions.style.display = "flex";
+            showResultsFor("batch");
         });
 
         batchFileInput.addEventListener("change", () => {
@@ -1121,10 +1230,42 @@
 
         batchClearButton.addEventListener("click", () => {
             batchFileInput.value = "";
-            batchFileInput.files = new DataTransfer().files;
-
             batchFileName.textContent = "No file chosen";
             batchAnalyzeButton.disabled = true;
+            clearResults();
+        });
+
+        batchAnalyzeButton.addEventListener("click", async () => {
+            const file = batchFileInput.files[0];
+            if (!file) return;
+
+            clearResults();
+            batchAnalyzeButton.disabled = true;
+            batchAnalyzeButton.innerHTML = `
+                <span class="loading"><span class="spinner"></span>Reading Excel...</span>
+            `;
+
+            try {
+                const formData = new FormData();
+                formData.append("file", file);
+                const response = await fetch("/bugs/batch", { method: "POST", body: formData });
+                let data;
+                try {
+                    data = await response.json();
+                } catch {
+                    data = await response.text();
+                }
+                if (!response.ok) throw data;
+                renderBatchResults(data);
+            } catch (error) {
+                clearResults();
+                errorMessage.textContent = formatError(error);
+                errorCard.classList.add("visible");
+                resultContext = { mode: "batch", type: "error" };
+            } finally {
+                batchAnalyzeButton.disabled = !batchFileInput.files[0];
+                batchAnalyzeButton.textContent = "Analyze Bugs";
+            }
         });
 
         /* =========================
@@ -1348,6 +1489,14 @@
             return String(error);
         }
 
+        function formatAnalysisValue(key, value) {
+            if (key === "missing_information" && Array.isArray(value) && value.length === 0) {
+                return "No missing information identified.";
+            }
+
+            return formatError(value) || "—";
+        }
+
         /*
          * Result rendering
          */
@@ -1355,9 +1504,23 @@
         function clearResults() {
             resultCard.classList.remove("visible");
             resultGrid.innerHTML = "";
+            resultHeading.textContent = "Analysis Result";
 
             errorCard.classList.remove("visible");
             errorMessage.textContent = "";
+            resultContext = null;
+        }
+
+        function showResultsFor(mode) {
+            resultCard.classList.remove("visible");
+            errorCard.classList.remove("visible");
+
+            if (!resultContext || resultContext.mode !== mode) {
+                return;
+            }
+
+            const card = resultContext.type === "result" ? resultCard : errorCard;
+            card.classList.add("visible");
         }
 
         function renderAnalysis(data) {
@@ -1366,6 +1529,7 @@
             if (!data || typeof data !== "object") {
                 errorMessage.textContent = "The analysis response was empty.";
                 errorCard.classList.add("visible");
+                resultContext = { mode: "single", type: "error" };
                 return;
             }
 
@@ -1390,6 +1554,7 @@
             if (!entries.length) {
                 errorMessage.textContent = "The analysis response was empty.";
                 errorCard.classList.add("visible");
+                resultContext = { mode: "single", type: "error" };
                 return;
             }
 
@@ -1443,7 +1608,7 @@
 
                 const valueElement = document.createElement("div");
                 valueElement.className = "result-value";
-                valueElement.textContent = formatError(value);
+                valueElement.textContent = formatAnalysisValue(key, value);
 
                 item.appendChild(label);
                 item.appendChild(valueElement);
@@ -1452,6 +1617,116 @@
             });
 
             resultCard.classList.add("visible");
+            resultContext = { mode: "single", type: "result" };
+        }
+
+        function renderBatchResults(data) {
+            clearResults();
+            if (!data || !Array.isArray(data.bugs) || data.bugs.length === 0) {
+                errorMessage.textContent = "The Excel file did not contain any bug records.";
+                errorCard.classList.add("visible");
+                resultContext = { mode: "batch", type: "error" };
+                return;
+            }
+
+            resultHeading.textContent = `Batch Analysis Result (${data.bugs.length} bugs)`;
+            const labels = {
+                severity: "Severity",
+                priority: "Priority",
+                category: "Category",
+                possible_root_cause: "Possible Root Cause",
+                suggested_test_scenarios: "Suggested Test Scenarios",
+                missing_information: "Missing Information",
+                confidence: "Confidence"
+            };
+
+            const analyses = data.bugs
+                .map(bug => bug.analysis)
+                .filter(analysis => analysis && typeof analysis === "object");
+
+            const summaryHeading = document.createElement("h3");
+            summaryHeading.className = "batch-summary-heading";
+            summaryHeading.textContent = "Batch Summary";
+            resultGrid.appendChild(summaryHeading);
+
+            const summary = document.createElement("div");
+            summary.className = "batch-summary";
+
+            const summaryFields = [
+                ["Severity", "severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"]],
+                ["Priority", "priority", ["P1", "P2", "P3", "P4"]],
+                ["Category", "category", []]
+            ];
+
+            summaryFields.forEach(([labelText, key, preferredOrder]) => {
+                const counts = analyses.reduce((result, analysis) => {
+                    const value = analysis[key] || "Unknown";
+                    result[value] = (result[value] || 0) + 1;
+                    return result;
+                }, {});
+                const labels = [
+                    ...preferredOrder.filter(value => counts[value]),
+                    ...Object.keys(counts)
+                        .filter(value => !preferredOrder.includes(value))
+                        .sort(),
+                ];
+
+                const item = document.createElement("div");
+                item.className = "result-item";
+                const label = document.createElement("div");
+                label.className = "result-label";
+                label.textContent = labelText;
+                const value = document.createElement("div");
+                value.className = "summary-chip-list";
+                labels.forEach(countLabel => {
+                    const chip = document.createElement("span");
+                    chip.className = "summary-chip";
+                    if (key === "severity") {
+                        chip.classList.add(`severity-${countLabel.toLowerCase()}`);
+                    }
+                    chip.setAttribute("aria-label", `${countLabel}: ${counts[countLabel]}`);
+
+                    const text = document.createElement("span");
+                    text.textContent = countLabel;
+                    const count = document.createElement("span");
+                    count.className = "summary-chip-count";
+                    count.textContent = counts[countLabel];
+                    chip.append(text, count);
+                    value.appendChild(chip);
+                });
+                item.append(label, value);
+                summary.appendChild(item);
+            });
+
+            resultGrid.appendChild(summary);
+
+            data.bugs.forEach((bug, index) => {
+                const analysis = bug.analysis;
+                if (!analysis || typeof analysis !== "object") {
+                    return;
+                }
+
+                const heading = document.createElement("h3");
+                heading.textContent = `Bug ${index + 1}: ${bug.title || "Untitled"}`;
+                heading.style.gridColumn = "1 / -1";
+                heading.style.margin = index ? "18px 0 0" : "0";
+                resultGrid.appendChild(heading);
+
+                Object.entries(labels).forEach(([key, labelText]) => {
+                    const item = document.createElement("div");
+                    item.className = "result-item";
+                    const label = document.createElement("div");
+                    label.className = "result-label";
+                    label.textContent = labelText;
+                    const value = document.createElement("div");
+                    value.className = "result-value";
+                    value.textContent = formatAnalysisValue(key, analysis[key]);
+                    item.append(label, value);
+                    resultGrid.appendChild(item);
+                });
+            });
+            resultCard.classList.add("visible");
+            resultContext = { mode: "batch", type: "result" };
         }
 
         /*
@@ -1531,6 +1806,7 @@
                 errorMessage.textContent = formatError(error);
 
                 errorCard.classList.add("visible");
+                resultContext = { mode: "single", type: "error" };
 
             } finally {
                 analyzeButton.disabled = false;

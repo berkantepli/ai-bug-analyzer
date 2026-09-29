@@ -15,13 +15,13 @@ The current implementation includes:
 - Bug title, description, steps to reproduce, expected result, and actual result fields
 - Screenshot upload with multiple screenshot support
 - Screenshot previews with individual removal
-- Batch bug report file upload
-- Excel (`.xlsx`, `.xls`) and PDF file support in the Batch Analysis UI
+- Batch bug report upload and parsing for Excel (`.xlsx`, `.xls`) files
+- Batch results showing each report's title, description, reproduction steps, expected result, and actual result
 - Clear and Analyze actions for both analysis modes
 - Batch Analyze action disabled until a file is selected
 - Dark/light theme support
 
-The current UI focuses on establishing the complete analysis workflow and user experience. The actual LLM-powered bug analysis and batch processing pipeline will be integrated incrementally.
+Batch Analysis reads the first worksheet and expects columns for Bug Title, Description, Steps to Reproduce, Expected Result, and Actual Result. It extracts and displays the records without LLM analysis.
 
 ## Planned Analysis
 
@@ -42,13 +42,12 @@ LLM output will be treated as untrusted input and validated before being used by
 
 Batch Analysis will allow users to upload structured bug reports and process multiple bugs in a single operation.
 
-Supported input formats currently exposed by the UI:
+Input formats currently exposed by the UI:
 
 - `.xlsx`
 - `.xls`
-- `.pdf`
 
-The batch workflow will eventually parse the uploaded reports, analyze individual bugs, and present structured results.
+Excel files are parsed and displayed as batch results. LLM analysis is planned for a later stage.
 
 ## Quality & Validation
 
