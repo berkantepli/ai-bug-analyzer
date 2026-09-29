@@ -252,6 +252,60 @@
             box-shadow: 0 1px 4px var(--shadow);
         }
 
+        .batch-analysis {
+            display: none;
+        }
+
+        .batch-upload-box {
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+            padding: 32px 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .batch-upload-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .batch-upload-text {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 18px;
+        }
+
+        .batch-file-input {
+            display: none;
+        }
+
+        .batch-file-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 9px 16px;
+            border-radius: 8px;
+            background: var(--card-secondary);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .batch-file-name {
+            margin-top: 14px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .batch-supported {
+            margin-top: 12px;
+            font-size: 11px;
+            color: var(--muted);
+        }
+
         .service-left {
             display: flex;
             align-items: center;
@@ -928,6 +982,44 @@
                     <pre id="errorMessage" class="error-message"></pre>
                 </div>
             </section>
+
+            <div id="batchAnalysis" class="batch-analysis form-card">
+
+                <div class="batch-upload-box">
+
+                    <div class="batch-upload-title">
+                        Upload Bug Reports
+                    </div>
+
+                    <div class="batch-upload-text">
+                        Select an Excel or PDF file containing your bug reports.
+                    </div>
+
+                    <label for="batchFileInput" class="batch-file-button">
+                        Choose File
+                    </label>
+
+                    <input type="file" id="batchFileInput" class="batch-file-input" accept=".xlsx,.xls,.pdf">
+
+                    <div id="batchFileName" class="batch-file-name">
+                        No file chosen
+                    </div>
+
+                    <div class="batch-supported">
+                        Supported: .xlsx, .xls, .pdf
+                    </div>
+
+                </div>
+                <div class="clear-wrapper">
+                    <button id="batchClearButton" class="clear-button" type="button">
+                        Clear
+                    </button>
+                </div>
+
+                <button id="batchAnalyzeButton" class="analyze-button" type="button" disabled>
+                    Analyze Bugs
+                </button>
+            </div>
         </main>
     </div>
 
@@ -950,14 +1042,50 @@
         const singleBugMode = document.getElementById("singleBugMode");
         const batchAnalysisMode = document.getElementById("batchAnalysisMode");
 
+        const batchAnalysis = document.getElementById("batchAnalysis");
+        const batchActions = document.getElementById("batchActions");
+        const batchFileInput = document.getElementById("batchFileInput");
+        const batchFileName = document.getElementById("batchFileName");
+        const batchClearButton = document.getElementById("batchClearButton");
+        const batchAnalyzeButton = document.getElementById("batchAnalyzeButton");
+
         singleBugMode.addEventListener("click", () => {
             singleBugMode.classList.add("active");
             batchAnalysisMode.classList.remove("active");
+
+            bugForm.style.display = "";
+            batchAnalysis.style.display = "none";
+            batchActions.style.display = "none";
         });
 
         batchAnalysisMode.addEventListener("click", () => {
             batchAnalysisMode.classList.add("active");
             singleBugMode.classList.remove("active");
+
+            bugForm.style.display = "none";
+            batchAnalysis.style.display = "block";
+            batchActions.style.display = "flex";
+        });
+
+        batchFileInput.addEventListener("change", () => {
+            const file = batchFileInput.files[0];
+
+            if (!file) {
+                batchFileName.textContent = "No file chosen";
+                batchAnalyzeButton.disabled = true;
+                return;
+            }
+
+            batchFileName.textContent = file.name;
+            batchAnalyzeButton.disabled = false;
+        });
+
+        batchClearButton.addEventListener("click", () => {
+            batchFileInput.value = "";
+            batchFileInput.files = new DataTransfer().files;
+
+            batchFileName.textContent = "No file chosen";
+            batchAnalyzeButton.disabled = true;
         });
 
         /* =========================
