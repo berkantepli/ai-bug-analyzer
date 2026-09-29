@@ -967,6 +967,77 @@
             line-height: 22px;
             padding: 0;
         }
+
+        .confidence-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 12px;
+            padding: 5px 10px;
+
+            border: 1px solid var(--border);
+            border-radius: 999px;
+
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            vertical-align: middle;
+
+            position: relative;
+            cursor: help;
+
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .confidence-badge::after {
+            content: attr(data-tooltip);
+
+            position: absolute;
+
+            left: 50%;
+            bottom: calc(100% + 9px);
+
+            width: 260px;
+
+            padding: 10px 12px;
+
+            transform: translateX(-50%) translateY(4px);
+
+            border: 1px solid var(--border);
+            border-radius: 8px;
+
+            background: var(--card);
+            color: var(--text);
+
+            box-shadow: 0 8px 24px var(--shadow);
+
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.5;
+            letter-spacing: normal;
+            text-align: left;
+
+            white-space: normal;
+
+            opacity: 0;
+            visibility: hidden;
+
+            pointer-events: none;
+
+            transition:
+                opacity 0.15s ease,
+                visibility 0.15s ease,
+                transform 0.15s ease;
+
+            z-index: 100;
+        }
+
+        .confidence-badge:hover::after {
+            opacity: 1;
+            visibility: visible;
+
+            transform: translateX(-50%) translateY(0);
+        }
     </style>
 </head>
 
@@ -1549,7 +1620,34 @@
                     ? data.analysis
                     : data;
 
-            const entries = Object.entries(analysis);
+            const entries = Object.entries(analysis).filter(
+                ([key]) => key !== "confidence"
+            );
+
+            const confidence = analysis.confidence;
+
+            if (confidence !== undefined && confidence !== null) {
+                const confidenceBadge = document.createElement("span");
+                confidenceBadge.className = "confidence-badge";
+
+                const confidenceValue =
+                    typeof confidence === "number"
+                        ? `${Math.round(confidence * 100)}%`
+                        : confidence;
+
+                confidenceBadge.textContent = `Confidence: ${confidenceValue}`;
+
+                confidenceBadge.setAttribute(
+                    "data-tooltip",
+                    "Indicates how confident the analysis is based on the information provided in the bug report. Higher confidence means the available information provides stronger support for the analysis."
+                );
+                confidenceBadge.setAttribute(
+                    "aria-label",
+                    "Indicates how confident the analysis is based on the information provided in the bug report. Higher confidence means the available information provides stronger support for the analysis."
+                );
+
+                resultHeading.appendChild(confidenceBadge);
+            }
 
             if (!entries.length) {
                 errorMessage.textContent = "The analysis response was empty.";
@@ -1589,8 +1687,6 @@
                     missing_information:
                         "Important details that are missing from the bug report and could help QA investigate, reproduce, or validate the issue more effectively.",
 
-                    confidence:
-                        "Indicates how confident the analysis is based on the information provided in the bug report. Higher confidence means the available information provides stronger support for the analysis."
                 };
 
                 const tooltipText = tooltipTexts[key];
@@ -1637,7 +1733,6 @@
                 possible_root_cause: "Possible Root Cause",
                 suggested_test_scenarios: "Suggested Test Scenarios",
                 missing_information: "Missing Information",
-                confidence: "Confidence"
             };
 
             const analyses = data.bugs
@@ -1707,9 +1802,40 @@
                 }
 
                 const heading = document.createElement("h3");
-                heading.textContent = `Bug ${index + 1}: ${bug.title || "Untitled"}`;
                 heading.style.gridColumn = "1 / -1";
                 heading.style.margin = index ? "18px 0 0" : "0";
+                heading.style.display = "flex";
+                heading.style.alignItems = "center";
+                heading.style.gap = "10px";
+
+                const title = document.createElement("span");
+                title.textContent = `Bug ${index + 1}: ${bug.title || "Untitled"}`;
+                title.style.flex = "1";
+                title.style.minWidth = "0";
+
+                const confidence = analysis.confidence;
+
+                if (confidence !== undefined && confidence !== null) {
+                    const confidenceBadge = document.createElement("span");
+                    confidenceBadge.className = "confidence-badge";
+
+                    const confidenceValue =
+                        typeof confidence === "number"
+                            ? `${Math.round(confidence * 100)}%`
+                            : confidence;
+
+                    confidenceBadge.textContent = `Confidence: ${confidenceValue}`;
+
+                    const confidenceTooltip =
+                        "Indicates how confident the analysis is based on the information provided in the bug report. Higher confidence means the available information provides stronger support for the analysis.";
+
+                    confidenceBadge.setAttribute("data-tooltip", confidenceTooltip);
+                    confidenceBadge.setAttribute("aria-label", confidenceTooltip);
+
+                    heading.appendChild(title);
+                    heading.appendChild(confidenceBadge);
+                }
+
                 resultGrid.appendChild(heading);
 
                 Object.entries(labels).forEach(([key, labelText]) => {
@@ -1718,6 +1844,38 @@
                     const label = document.createElement("div");
                     label.className = "result-label";
                     label.textContent = labelText;
+                    const tooltipTexts = {
+                        severity:
+                            "How much impact the bug has on the system or user experience. Critical issues may block a major function or make the application unusable.",
+
+                        priority:
+                            "How urgently the bug should be fixed from a product and business perspective. Higher priority means the issue should be addressed sooner.",
+
+                        category:
+                            "The type of problem identified in the bug report. Examples include Functional, UI, Performance, Security, Compatibility, and Data.",
+
+                        possible_root_cause:
+                            "A likely technical or logical reason behind the observed bug. This is an analysis hypothesis and may require further investigation.",
+
+                        suggested_test_scenarios:
+                            "Recommended test cases to reproduce, verify, and validate the bug and its fix. These may include positive, negative, boundary, and regression scenarios.",
+
+                        missing_information:
+                            "Important details that are missing from the bug report and could help QA investigate, reproduce, or validate the issue more effectively."
+                    };
+
+                    const tooltipText = tooltipTexts[key];
+
+                    if (tooltipText) {
+                        const info = document.createElement("span");
+
+                        info.className = "info-tooltip";
+                        info.textContent = "i";
+                        info.setAttribute("data-tooltip", tooltipText);
+                        info.setAttribute("aria-label", tooltipText);
+
+                        label.appendChild(info);
+                    }
                     const value = document.createElement("div");
                     value.className = "result-value";
                     value.textContent = formatAnalysisValue(key, analysis[key]);
