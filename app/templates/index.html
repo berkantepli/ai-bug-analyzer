@@ -216,6 +216,42 @@
             font-weight: 650;
         }
 
+        .analysis-mode {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            padding: 4px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--card-secondary);
+        }
+
+        .analysis-mode-button {
+            flex: 1;
+            height: 38px;
+            border: 0;
+            border-radius: 7px;
+            background: transparent;
+            color: var(--muted);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition:
+                background-color 0.15s ease,
+                color 0.15s ease;
+        }
+
+        .analysis-mode-button:hover {
+            color: var(--text);
+        }
+
+        .analysis-mode-button.active {
+            background: var(--card);
+            color: var(--text);
+            box-shadow: 0 1px 4px var(--shadow);
+        }
+
         .service-left {
             display: flex;
             align-items: center;
@@ -773,6 +809,16 @@
             <span id="serviceValue" class="service-value">Checking...</span>
         </div>
 
+        <div class="analysis-mode">
+            <button id="singleBugMode" class="analysis-mode-button active" type="button">
+                Single Bug
+            </button>
+
+            <button id="batchAnalysisMode" class="analysis-mode-button" type="button">
+                Batch Analysis
+            </button>
+        </div>
+
         <main>
             <form id="bugForm" class="form-card" novalidate>
 
@@ -900,6 +946,19 @@
 
         const statusDot = document.getElementById("statusDot");
         const serviceValue = document.getElementById("serviceValue");
+
+        const singleBugMode = document.getElementById("singleBugMode");
+        const batchAnalysisMode = document.getElementById("batchAnalysisMode");
+
+        singleBugMode.addEventListener("click", () => {
+            singleBugMode.classList.add("active");
+            batchAnalysisMode.classList.remove("active");
+        });
+
+        batchAnalysisMode.addEventListener("click", () => {
+            batchAnalysisMode.classList.add("active");
+            singleBugMode.classList.remove("active");
+        });
 
         /* =========================
             Screenshot Upload
