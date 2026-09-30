@@ -2156,33 +2156,28 @@
             }
         }
 
-        function stopAnalyzingDots() {
-            if (analyzingInterval) {
-                clearInterval(analyzingInterval);
-                analyzingInterval = null;
-            }
-        }
-
-        let analyzingDots = 0;
-        let analyzingInterval = null;
+        let analyzingDotsInterval = null;
 
         function startAnalyzingDots() {
-            if (analyzingInterval) {
+            if (analyzingDotsInterval) {
                 return;
             }
 
-            analyzingDots = 0;
+            const progressStatus = document.getElementById("batchProgressStatus");
 
-            analyzingInterval = setInterval(() => {
-                analyzingDots = (analyzingDots + 1) % 4;
+            let dots = 0;
 
-                const dots = ".".repeat(analyzingDots);
-                const statusElement = document.getElementById("batchProgressStatus");
-
-                if (statusElement) {
-                    statusElement.textContent = `Analyzing${dots}`;
-                }
+            analyzingDotsInterval = setInterval(() => {
+                dots = (dots + 1) % 4;
+                progressStatus.textContent = "Analyzing" + ".".repeat(dots);
             }, 500);
+        }
+
+        function stopAnalyzingDots() {
+            if (analyzingDotsInterval) {
+                clearInterval(analyzingDotsInterval);
+                analyzingDotsInterval = null;
+            }
         }
 
         async function updateBatchProgress() {
@@ -2214,7 +2209,6 @@
 
             } else if (progress.status === "processing") {
                 progressStatus.classList.remove("completed");
-                progressStatus.textContent = "Analyzing";
                 startAnalyzingDots();
             } else {
                 progressStatus.textContent = progress.status;
@@ -2250,7 +2244,7 @@
                     clearInterval(interval);
                     stopBatchTimer();
                 }
-            }, 500);
+            }, 1000);
         }
 
         batchAnalyzeButton.addEventListener("click", async () => {
