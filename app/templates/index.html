@@ -1970,17 +1970,36 @@
                 return;
             }
 
-            const payload = {
-                title: fields.bugTitle.input.value.trim(),
+            const formData = new FormData();
 
-                description: fields.description.input.value.trim(),
+            formData.append(
+                "title",
+                fields.bugTitle.input.value.trim()
+            );
 
-                steps_to_reproduce: stepsToReproduce,
+            formData.append(
+                "description",
+                fields.description.input.value.trim()
+            );
 
-                expected_result: fields.expectedResult.input.value.trim(),
+            formData.append(
+                "steps_to_reproduce",
+                stepsToReproduce.join("\n")
+            );
 
-                actual_result: fields.actualResult.input.value.trim()
-            };
+            formData.append(
+                "expected_result",
+                fields.expectedResult.input.value.trim()
+            );
+
+            formData.append(
+                "actual_result",
+                fields.actualResult.input.value.trim()
+            );
+
+            selectedScreenshots.forEach((file) => {
+                formData.append("screenshots", file);
+            });
 
             analyzeButton.disabled = true;
 
@@ -1994,10 +2013,7 @@
             try {
                 const response = await fetch("/bugs/analyze", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(payload)
+                    body: formData
                 });
 
                 let data;
