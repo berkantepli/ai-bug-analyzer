@@ -154,9 +154,9 @@
             position: relative;
             display: flex;
             align-items: center;
-            width: 68px;
-            height: 36px;
-            padding: 3px;
+            width: 44px;
+            height: 24px;
+            padding: 2px;
             border: 1px solid var(--border);
             border-radius: 999px;
             background: var(--card-secondary);
@@ -173,17 +173,17 @@
 
         .theme-switch-track {
             position: absolute;
-            inset: 3px;
+            inset: 2px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 7px;
+            padding: 0 4px;
             pointer-events: none;
         }
 
         .theme-icon {
-            width: 14px;
-            height: 14px;
+            width: 10px;
+            height: 10px;
             color: var(--muted);
             opacity: 0.75;
             transition: opacity 0.2s ease;
@@ -192,11 +192,11 @@
         .theme-knob {
             position: relative;
             z-index: 2;
-            width: 28px;
-            height: 28px;
+            width: 19px;
+            height: 19px;
             border-radius: 50%;
             background: var(--text);
-            box-shadow: 0 2px 7px var(--shadow);
+            box-shadow: 0 2px 5px var(--shadow);
             transform: translateX(0);
             transition:
                 transform 0.22s ease,
@@ -204,32 +204,7 @@
         }
 
         body.light .theme-knob {
-            transform: translateX(32px);
-        }
-
-        .theme-switch[aria-label]::after {
-            content: attr(aria-label);
-            position: absolute;
-            right: 0;
-            top: calc(100% + 9px);
-            padding: 6px 9px;
-            border-radius: 6px;
-            background: var(--text);
-            color: var(--bg);
-            font-size: 11px;
-            line-height: 1;
-            white-space: nowrap;
-            opacity: 0;
-            pointer-events: none;
-            transform: translateY(-3px);
-            transition:
-                opacity 0.15s ease,
-                transform 0.15s ease;
-        }
-
-        .theme-switch:hover::after {
-            opacity: 1;
-            transform: translateY(0);
+            transform: translateX(20px);
         }
 
         /* Service status */
@@ -1111,6 +1086,10 @@
             transform: scale(1.08);
         }
 
+        .diagnosis-icon-button.diagnosis-available {
+            color: #94a3b8;
+            font-size: 14px;
+        }
 
         /* Diagnosis Modal */
 
@@ -1124,6 +1103,8 @@
             justify-content: center;
 
             padding: 20px;
+
+            overflow-y: auto;
         }
 
         .diagnosis-modal[hidden] {
@@ -1138,9 +1119,6 @@
             inset: 0;
 
             background: rgba(0, 0, 0, 0.25);
-
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
         }
 
 
@@ -1160,7 +1138,7 @@
             border: 1px solid var(--border);
             border-radius: 14px;
 
-            background: var(--background);
+            background: var(--card);
             color: var(--text);
 
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
@@ -1203,7 +1181,7 @@
             border-radius: 8px;
 
             background: var(--background);
-            color: var(--muted);
+            color: var(--text);
 
             font-size: 20px;
             line-height: 1;
@@ -1217,12 +1195,13 @@
         }
 
 
-        /* Diagnosis Message */
+        /* =========================
+   Diagnosis Message
+   ========================= */
 
         .service-diagnosis-message {
-            margin-top: 0;
-
-            padding: 14px;
+            margin: 0 !important;
+            padding: 6px 16px !important;
 
             border: 1px solid var(--border);
             border-radius: 10px;
@@ -1230,10 +1209,183 @@
             background: var(--surface);
             color: var(--text);
 
-            white-space: pre-line;
+            font-size: 14px;
+            line-height: 1.45;
+
+            overflow-y: auto;
+            max-height: 420px;
+        }
+
+
+        /* =========================
+   Diagnosis Item
+   ========================= */
+
+        .service-diagnosis-message .diagnosis-item {
+            margin: 0 !important;
+            padding: 12px 0 !important;
+
+            min-height: 0 !important;
+            height: auto !important;
+        }
+
+        .service-diagnosis-message .diagnosis-item+.diagnosis-item {
+            border-top: 1px solid var(--border);
+        }
+
+
+        /* =========================
+   Item Header
+   ========================= */
+
+        .service-diagnosis-message .diagnosis-item-header {
+            display: flex !important;
+            align-items: center !important;
+
+            gap: 8px;
+
+            margin: 0 !important;
+            padding: 0 !important;
+
+            min-height: 20px !important;
+            height: auto !important;
+        }
+
+
+        /* =========================
+   Status Dot
+   ========================= */
+
+        .diagnosis-status-dot {
+            display: inline-block;
+
+            width: 8px !important;
+            height: 8px !important;
+
+            min-width: 8px !important;
+            min-height: 8px !important;
+
+            padding: 0 !important;
+            margin: 0 !important;
+
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .diagnosis-status-dot.available {
+            background: #22c55e;
+        }
+
+        .diagnosis-status-dot.unavailable {
+            background: #ef4444;
+        }
+
+        .diagnosis-status-dot.checking {
+            background: #f59e0b;
+        }
+
+        .diagnosis-status-dot.not-checked {
+            background: #94a3b8;
+        }
+
+
+        /* =========================
+   Item Title
+   ========================= */
+
+        .diagnosis-item-title {
+            margin: 0 !important;
+            padding: 0 !important;
 
             font-size: 14px;
-            line-height: 1.6;
+            line-height: 1.3;
+
+            font-weight: 700;
+
+            color: var(--text);
+        }
+
+
+        /* =========================
+   Status Text
+   ========================= */
+
+        .diagnosis-status-text {
+            margin: 0 0 0 auto !important;
+            padding: 0 !important;
+
+            font-size: 12px;
+            line-height: 1.3;
+
+            font-weight: 700;
+        }
+
+        .diagnosis-status-text.available {
+            color: #16a34a;
+        }
+
+        .diagnosis-status-text.unavailable {
+            color: #dc2626;
+        }
+
+        .diagnosis-status-text.checking {
+            color: #d97706;
+        }
+
+        .diagnosis-status-text.not-checked {
+            color: #64748b;
+        }
+
+
+        /* =========================
+   Diagnosis Message Text
+   ========================= */
+
+        .service-diagnosis-message .diagnosis-item-message {
+            margin: 6px 0 0 16px !important;
+            padding: 0 !important;
+
+            color: var(--muted);
+
+            font-size: 13px;
+            line-height: 1.45;
+
+            min-height: 0 !important;
+            height: auto !important;
+        }
+
+
+        /* =========================
+   Retry Button
+   ========================= */
+
+        .diagnosis-retry-button {
+            width: 100%;
+
+            margin-top: 10px !important;
+            padding: 9px 14px !important;
+
+            border: 1px solid var(--border);
+            border-radius: 9px;
+
+            background: var(--card-secondary);
+            color: var(--text);
+
+            font-size: 13px;
+            line-height: 1.3;
+
+            font-weight: 700;
+
+            cursor: pointer;
+        }
+
+        .diagnosis-retry-button:hover {
+            background: var(--surface);
+        }
+
+        .diagnosis-retry-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -1469,6 +1621,9 @@
 
                 <div id="serviceDiagnosisMessage" class="service-diagnosis-message">
                 </div>
+                <button id="diagnosisRetryButton" class="diagnosis-retry-button" type="button">
+                    Retry Connection
+                </button>
 
             </div>
 
@@ -1483,6 +1638,7 @@
         const diagnosisModal = document.getElementById("diagnosisModal");
         const diagnosisCloseButton = document.getElementById("diagnosisCloseButton");
         const serviceDiagnosisMessage = document.getElementById("serviceDiagnosisMessage");
+        const diagnosisRetryButton = document.getElementById("diagnosisRetryButton");
 
         const resultCard = document.getElementById("resultCard");
         const resultGrid = document.getElementById("resultGrid");
@@ -1507,6 +1663,32 @@
         const batchClearButton = document.getElementById("batchClearButton");
         const batchAnalyzeButton = document.getElementById("batchAnalyzeButton");
         let resultContext = null;
+
+        async function getAnalysisDiagnosisData() {
+            try {
+                const response = await fetch("/health/analysis/diagnose", {
+                    method: "GET",
+                    cache: "no-store"
+                });
+
+                let data;
+
+                try {
+                    data = await response.json();
+                } catch {
+                    data = null;
+                }
+
+                if (!response.ok || !data) {
+                    return null;
+                }
+
+                return data;
+
+            } catch {
+                return null;
+            }
+        }
 
         async function checkAnalysisHealth() {
             try {
@@ -1542,38 +1724,231 @@
 
         function getAnalysisDiagnosis(data) {
             if (!data) {
-                return "No diagnostic information was returned.";
+                return `
+            <div class="diagnosis-item">
+                <div class="diagnosis-item-header">
+                    <span class="diagnosis-status-dot unavailable"></span>
+                    <span class="diagnosis-item-title">Diagnosis</span>
+                    <span class="diagnosis-status-text unavailable">
+                        Unavailable
+                    </span>
+                </div>
+
+                <div class="diagnosis-item-message">
+                    No diagnostic information was returned.
+                </div>
+            </div>
+        `;
             }
 
-            if (data.available) {
-                return "Analysis service is available.";
-            }
+            const items = [];
 
-            const lines = [];
+            /*
+             * Application
+             */
 
-            if (data.provider) {
-                lines.push(`Provider: ${data.provider}`);
-            }
+            const applicationStatus =
+                data.application?.status || "unavailable";
 
-            if (data.model) {
-                lines.push(`Model: ${data.model}`);
-            }
+            const applicationAvailable =
+                applicationStatus === "available";
 
-            if (data.ollama?.status) {
-                lines.push(`Ollama status: ${data.ollama.status}`);
-            }
+            items.push(`
+        <div class="diagnosis-item">
+            <div class="diagnosis-item-header">
 
-            if (data.ollama?.reason) {
-                lines.push(`Reason: ${data.ollama.reason}`);
-            }
+                <span class="diagnosis-status-dot ${applicationAvailable
+                    ? "available"
+                    : "unavailable"
+                }"></span>
 
-            if (data.model_status) {
-                lines.push(`Model status: ${data.model_status}`);
-            }
+                <span class="diagnosis-item-title">
+                    Application
+                </span>
 
-            return lines.length
-                ? lines.join("\n")
-                : "The analysis service is unavailable, but no detailed reason was provided.";
+                <span class="diagnosis-status-text ${applicationAvailable
+                    ? "available"
+                    : "unavailable"
+                }">
+                    ${applicationAvailable
+                    ? "Available"
+                    : "Unavailable"
+                }
+                </span>
+
+            </div>
+
+            <div class="diagnosis-item-message">
+                ${data.application?.reason ||
+                "FastAPI application is running."
+                }
+            </div>
+        </div>
+    `);
+
+
+            /*
+             * Ollama
+             */
+
+            const ollamaStatus =
+                data.ollama?.status || "unavailable";
+
+            const ollamaAvailable =
+                ollamaStatus === "available";
+
+            items.push(`
+        <div class="diagnosis-item">
+
+            <div class="diagnosis-item-header">
+
+                <span class="diagnosis-status-dot ${ollamaAvailable
+                    ? "available"
+                    : "unavailable"
+                }"></span>
+
+                <span class="diagnosis-item-title">
+                    Ollama
+                </span>
+
+                <span class="diagnosis-status-text ${ollamaAvailable
+                    ? "available"
+                    : "unavailable"
+                }">
+                    ${ollamaAvailable
+                    ? "Available"
+                    : "Unavailable"
+                }
+                </span>
+
+            </div>
+
+            ${data.ollama?.reason
+                    ? `
+                    <div class="diagnosis-item-message">
+                        ${data.ollama.reason}
+                    </div>
+                `
+                    : ""
+                }
+
+        </div>
+    `);
+
+
+            /*
+             * Model
+             */
+
+            const modelStatus =
+                data.model?.status ||
+                data.model_status ||
+                "not_checked";
+
+            const modelAvailable =
+                modelStatus === "available";
+
+            const modelClass =
+                modelStatus === "available"
+                    ? "available"
+                    : modelStatus === "not_checked"
+                        ? "not-checked"
+                        : "unavailable";
+
+            const modelLabel =
+                modelStatus === "available"
+                    ? "Available"
+                    : modelStatus === "not_checked"
+                        ? "Not checked"
+                        : "Unavailable";
+
+            items.push(`
+        <div class="diagnosis-item">
+
+            <div class="diagnosis-item-header">
+
+                <span class="diagnosis-status-dot ${modelClass}">
+                </span>
+
+                <span class="diagnosis-item-title">
+                    Model
+                </span>
+
+                <span class="diagnosis-status-text ${modelClass}">
+                    ${modelLabel}
+                </span>
+
+            </div>
+
+            <div class="diagnosis-item-message">
+                Required model: qwen3-vl:8b-instruct
+            </div>
+
+            ${data.model?.reason
+                    ? `
+                    <div class="diagnosis-item-message">
+                        ${data.model.reason}
+                    </div>
+                `
+                    : ""
+                }
+
+        </div>
+    `);
+
+
+            /*
+             * Inference
+             */
+
+            const inferenceStatus =
+                data.inference?.status || "not_checked";
+
+            const inferenceClass =
+                inferenceStatus === "available"
+                    ? "available"
+                    : inferenceStatus === "not_checked"
+                        ? "not-checked"
+                        : "unavailable";
+
+            const inferenceLabel =
+                inferenceStatus === "available"
+                    ? "Available"
+                    : inferenceStatus === "not_checked"
+                        ? "Not checked"
+                        : "Unavailable";
+
+            items.push(`
+        <div class="diagnosis-item">
+
+            <div class="diagnosis-item-header">
+
+                <span class="diagnosis-status-dot ${inferenceClass}">
+                </span>
+
+                <span class="diagnosis-item-title">
+                    Inference
+                </span>
+
+                <span class="diagnosis-status-text ${inferenceClass}">
+                    ${inferenceLabel}
+                </span>
+
+            </div>
+
+            ${data.inference?.reason
+                    ? `
+                    <div class="diagnosis-item-message">
+                        ${data.inference.reason}
+                    </div>
+                `
+                    : ""
+                }
+
+        </div>
+    `);
+
+            return items.join("");
         }
 
         singleBugMode.addEventListener("click", () => {
@@ -2329,9 +2704,18 @@
          * Health check
          */
 
+        /*
+ * Health check
+ */
+
         async function checkServiceStatus() {
             // Start with Checking state
-            statusDot.classList.remove("checking", "available", "unavailable");
+            statusDot.classList.remove(
+                "checking",
+                "available",
+                "unavailable"
+            );
+
             statusDot.classList.add("checking");
 
             serviceValue.textContent = "Checking...";
@@ -2341,40 +2725,183 @@
                 const data = await checkAnalysisHealth();
 
                 // Clear previous status
-                statusDot.classList.remove("checking", "available", "unavailable");
+                statusDot.classList.remove(
+                    "checking",
+                    "available",
+                    "unavailable"
+                );
 
                 if (data.available) {
-                    // Available
+                    // Analysis service is available
                     statusDot.classList.add("available");
 
                     serviceValue.textContent = "Available";
                     analyzeButton.disabled = false;
-                    diagnosisButton.style.display = "none";
+
+                    // Diagnosis is always available
+                    diagnosisButton.textContent = "✓";
+                    diagnosisButton.classList.add("diagnosis-available");
+                    diagnosisButton.style.display = "flex";
 
                     return;
                 }
 
-                // Unavailable
+                // Analysis service is unavailable
+                // Analysis service is unavailable
                 statusDot.classList.add("unavailable");
 
                 serviceValue.textContent = "Unavailable";
                 analyzeButton.disabled = true;
+
+                diagnosisButton.classList.remove("diagnosis-available");
+                diagnosisButton.textContent = "⚠";
                 diagnosisButton.style.display = "flex";
 
-                serviceDiagnosisMessage.textContent =
-                    getAnalysisDiagnosis(data);
+                // Get detailed diagnosis
+                const diagnosisData = await getAnalysisDiagnosisData();
 
-            } catch {
-                // Unavailable because the service could not be reached
-                statusDot.classList.remove("checking", "available", "unavailable");
-                statusDot.classList.add("unavailable");
+                serviceDiagnosisMessage.innerHTML =
+                    getAnalysisDiagnosis(diagnosisData);
+
+            } catch (error) {
+                statusDot.classList.remove(
+                    "checking",
+                    "available",
+                    "unavailable"
+                );
 
                 serviceValue.textContent = "Unavailable";
                 analyzeButton.disabled = true;
+
+                diagnosisButton.classList.remove("diagnosis-available");
+                diagnosisButton.textContent = "⚠";
                 diagnosisButton.style.display = "flex";
 
-                serviceDiagnosisMessage.textContent =
-                    "Could not connect to the analysis service.";
+                serviceDiagnosisMessage.innerHTML = `
+    <div class="diagnosis-item">
+        <div class="diagnosis-item-header">
+
+            <span class="diagnosis-status-dot unavailable"></span>
+
+            <span class="diagnosis-item-title">
+                Connection Check
+            </span>
+
+            <span class="diagnosis-status-text unavailable">
+                Failed
+            </span>
+
+        </div>
+
+        <div class="diagnosis-item-message">
+            Could not connect to the analysis service.
+        </div>
+    </div>
+`;
+            }
+        }
+
+
+        /*
+         * Retry diagnosis
+         */
+
+        async function retryAnalysisConnection() {
+            diagnosisRetryButton.disabled = true;
+            diagnosisRetryButton.textContent = "Checking...";
+
+            serviceDiagnosisMessage.innerHTML = `
+        <div class="diagnosis-item">
+            <div class="diagnosis-item-header">
+
+                <span class="diagnosis-status-dot checking"></span>
+
+                <span class="diagnosis-item-title">
+                    Connection Check
+                </span>
+
+                <span class="diagnosis-status-text checking">
+                    Checking
+                </span>
+
+            </div>
+
+            <div class="diagnosis-item-message">
+                Checking Ollama, required model and inference...
+            </div>
+        </div>
+    `;
+
+            try {
+                const diagnosisData = await getAnalysisDiagnosisData();
+
+                if (!diagnosisData) {
+                    throw new Error("No diagnostic information was returned.");
+                }
+
+                // Update diagnosis modal
+                serviceDiagnosisMessage.innerHTML =
+                    getAnalysisDiagnosis(diagnosisData);
+
+                // Update main service status
+                if (diagnosisData.available) {
+                    statusDot.classList.remove(
+                        "checking",
+                        "available",
+                        "unavailable"
+                    );
+
+                    statusDot.classList.add("available");
+
+                    serviceValue.textContent = "Available";
+                    analyzeButton.disabled = false;
+
+                    // Diagnosis button remains visible
+                    diagnosisButton.style.display = "flex";
+
+                } else {
+                    statusDot.classList.remove(
+                        "checking",
+                        "available",
+                        "unavailable"
+                    );
+
+                    statusDot.classList.add("unavailable");
+
+                    serviceValue.textContent = "Unavailable";
+                    analyzeButton.disabled = true;
+
+                    diagnosisButton.style.display = "flex";
+                }
+
+            } catch (error) {
+                serviceDiagnosisMessage.innerHTML = `
+            <div class="diagnosis-item">
+
+                <div class="diagnosis-item-header">
+
+                    <span class="diagnosis-status-dot unavailable"></span>
+
+                    <span class="diagnosis-item-title">
+                        Connection Check
+                    </span>
+
+                    <span class="diagnosis-status-text unavailable">
+                        Failed
+                    </span>
+
+                </div>
+
+                <div class="diagnosis-item-message">
+                    Could not complete the diagnosis check.
+                </div>
+
+            </div>
+        `;
+
+            } finally {
+                diagnosisRetryButton.disabled = false;
+                diagnosisRetryButton.textContent = "Retry Connection";
             }
         }
 
@@ -2383,30 +2910,112 @@
          * Diagnosis modal
          */
 
-        diagnosisButton.addEventListener("click", () => {
+        diagnosisButton.addEventListener("click", async () => {
             diagnosisModal.hidden = false;
+            document.body.style.overflow = "hidden";
+
+            diagnosisRetryButton.disabled = true;
+            diagnosisRetryButton.textContent = "Checking...";
+
+            serviceDiagnosisMessage.innerHTML = `
+        <div class="diagnosis-item">
+            <div class="diagnosis-item-header">
+
+                <span class="diagnosis-status-dot checking"></span>
+
+                <span class="diagnosis-item-title">
+                    Connection Check
+                </span>
+
+                <span class="diagnosis-status-text checking">
+                    Checking
+                </span>
+
+            </div>
+
+            <div class="diagnosis-item-message">
+                Checking Ollama, required model and inference...
+            </div>
+        </div>
+    `;
+
+            try {
+                const diagnosisData = await getAnalysisDiagnosisData();
+
+                if (!diagnosisData) {
+                    throw new Error("No diagnostic information was returned.");
+                }
+
+                serviceDiagnosisMessage.innerHTML =
+                    getAnalysisDiagnosis(diagnosisData);
+
+            } catch (error) {
+                serviceDiagnosisMessage.innerHTML = `
+            <div class="diagnosis-item">
+                <div class="diagnosis-item-header">
+
+                    <span class="diagnosis-status-dot unavailable"></span>
+
+                    <span class="diagnosis-item-title">
+                        Connection Check
+                    </span>
+
+                    <span class="diagnosis-status-text unavailable">
+                        Failed
+                    </span>
+
+                </div>
+
+                <div class="diagnosis-item-message">
+                    Could not complete the diagnosis check.
+                </div>
+            </div>
+        `;
+            } finally {
+                diagnosisRetryButton.disabled = false;
+                diagnosisRetryButton.textContent = "Retry Connection";
+            }
         });
+
 
         diagnosisCloseButton.addEventListener("click", () => {
             diagnosisModal.hidden = true;
+            document.body.style.overflow = "";
         });
 
-        document.querySelector(".diagnosis-modal-backdrop")
+
+        document
+            .querySelector(".diagnosis-modal-backdrop")
             .addEventListener("click", () => {
                 diagnosisModal.hidden = true;
+                document.body.style.overflow = "";
             });
+
 
         document.addEventListener("keydown", (event) => {
             if (event.key === "Escape") {
                 diagnosisModal.hidden = true;
+                document.body.style.overflow = "";
             }
         });
+
 
         diagnosisModal.addEventListener("click", (event) => {
             if (event.target === diagnosisModal) {
                 diagnosisModal.hidden = true;
+                document.body.style.overflow = "";
             }
         });
+
+
+        /*
+         * Retry Connection button
+         */
+
+        diagnosisRetryButton.addEventListener(
+            "click",
+            retryAnalysisConnection
+        );
 
 
         /*
