@@ -2,7 +2,9 @@ import asyncio
 import base64
 import json
 from typing import Optional
+
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
@@ -137,10 +139,28 @@ def _call_ollama(payload: dict) -> dict:
         method="POST",
     )
 
-    with urlopen(request, timeout=120) as response:
-        response_data = response.read().decode("utf-8")
+    try:
+        with urlopen(request, timeout=120) as response:
+            response_data = response.read().decode("utf-8")
 
-    return json.loads(response_data)
+    except HTTPError as error:
+        error_body = error.read().decode("utf-8", errors="replace")
+
+        raise RuntimeError(
+            f"Ollama returned HTTP {error.code}: {error_body}"
+        ) from error
+
+    except URLError as error:
+        raise RuntimeError(
+            "Could not connect to Ollama. "
+            "Make sure Ollama is running on http://127.0.0.1:11434."
+        ) from error
+
+    try:
+        return json.loads(response_data)
+
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Ollama returned an invalid JSON response.") from error
 
 
 async def analyze_with_llm(
@@ -180,13 +200,36 @@ async def analyze_with_llm(
         },
     }
 
-    response = await asyncio.to_thread(
-        _call_ollama,
-        payload,
-    )
+    try:
+        response = await asyncio.to_thread(
+            _call_ollama,
+            payload,
+        )
 
-    content = response["message"]["content"]
+    except RuntimeError:
+        raise
 
-    analysis_data = json.loads(content)
+    except Exception as error:
+        raise RuntimeError(f"Unexpected error while calling Ollama: {error}") from error
 
-    return BugAnalysis.model_validate(analysis_data)
+    try:
+        content = response["message"]["content"]
+
+    except (KeyError, TypeError) as error:
+        raise RuntimeError(
+            "Ollama response did not contain the expected message content."
+        ) from error
+
+    try:
+        analysis_data = json.loads(content)
+
+    except json.JSONDecodeError as error:
+        raise RuntimeError("The LLM returned invalid JSON.") from error
+
+    try:
+        return BugAnalysis.model_validate(analysis_data)
+
+    except Exception as error:
+        raise RuntimeError(
+            f"LLM response failed BugAnalysis validation: {error}"
+        ) from error

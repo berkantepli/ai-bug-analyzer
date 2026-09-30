@@ -248,6 +248,22 @@
             font-weight: 650;
         }
 
+        .service-status-left {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .service-status-right {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
         .analysis-mode {
             display: flex;
             gap: 4px;
@@ -345,19 +361,23 @@
         }
 
         .status-dot {
+            display: inline-block;
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: var(--success);
             flex-shrink: 0;
         }
 
-        .status-dot.unavailable {
-            background: var(--danger);
+        .status-dot.available {
+            background: var(--success);
         }
 
         .status-dot.checking {
             background: #f59e0b;
+        }
+
+        .status-dot.unavailable {
+            background: #ef4444;
         }
 
         .service-text {
@@ -1072,6 +1092,149 @@
 
             transform: translateX(-50%) translateY(0);
         }
+
+        /* Diagnosis Icon */
+
+        .diagnosis-icon-button {
+            display: none;
+            padding: 2px 4px;
+            border: none;
+            background: transparent;
+            color: #f59e0b;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .diagnosis-icon-button:hover {
+            color: #d97706;
+            transform: scale(1.08);
+        }
+
+
+        /* Diagnosis Modal */
+
+        .diagnosis-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            padding: 20px;
+        }
+
+        .diagnosis-modal[hidden] {
+            display: none;
+        }
+
+
+        /* Background */
+
+        .diagnosis-modal-backdrop {
+            position: absolute;
+            inset: 0;
+
+            background: rgba(0, 0, 0, 0.25);
+
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+
+        /* Modal */
+
+        .diagnosis-modal-content {
+            position: relative;
+            z-index: 1;
+
+            width: min(500px, calc(100% - 40px));
+            max-height: calc(100vh - 40px);
+
+            overflow-y: auto;
+
+            padding: 20px;
+
+            border: 1px solid var(--border);
+            border-radius: 14px;
+
+            background: var(--background);
+            color: var(--text);
+
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+        }
+
+
+        /* Header */
+
+        .diagnosis-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+
+            margin-bottom: 18px;
+        }
+
+        .diagnosis-modal-header h3 {
+            margin: 0;
+            color: var(--text);
+        }
+
+
+        /* Close Button */
+
+        .diagnosis-close-button {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            width: 32px;
+            height: 32px;
+
+            padding: 0;
+
+            border: 1px solid var(--border);
+            border-radius: 8px;
+
+            background: var(--background);
+            color: var(--muted);
+
+            font-size: 20px;
+            line-height: 1;
+
+            cursor: pointer;
+        }
+
+        .diagnosis-close-button:hover {
+            background: var(--surface);
+            color: var(--text);
+        }
+
+
+        /* Diagnosis Message */
+
+        .service-diagnosis-message {
+            margin-top: 0;
+
+            padding: 14px;
+
+            border: 1px solid var(--border);
+            border-radius: 10px;
+
+            background: var(--surface);
+            color: var(--text);
+
+            white-space: pre-line;
+
+            font-size: 14px;
+            line-height: 1.6;
+        }
     </style>
 </head>
 
@@ -1107,12 +1270,19 @@
         </header>
 
         <div class="service-status">
-            <div class="service-left">
+            <div class="service-status-left">
                 <span id="statusDot" class="status-dot"></span>
-                <span class="service-text">Analysis service</span>
+                <span>Analysis service</span>
             </div>
 
-            <span id="serviceValue" class="service-value">Checking...</span>
+            <div class="service-status-right">
+                <span id="serviceValue">Checking...</span>
+
+                <button id="diagnosisButton" class="diagnosis-icon-button" type="button" title="Service diagnosis"
+                    aria-label="Service diagnosis">
+                    ⚠
+                </button>
+            </div>
         </div>
 
         <div class="analysis-mode">
@@ -1281,12 +1451,38 @@
                 </div>
             </section>
         </main>
+        <!-- Diagnosis Modal -->
+
+        <div id="diagnosisModal" class="diagnosis-modal" hidden>
+
+            <div class="diagnosis-modal-backdrop"></div>
+
+            <div class="diagnosis-modal-content">
+
+                <div class="diagnosis-modal-header">
+                    <h3>Analysis Service Diagnosis</h3>
+
+                    <button id="diagnosisCloseButton" class="diagnosis-close-button" type="button" aria-label="Close">
+                        ×
+                    </button>
+                </div>
+
+                <div id="serviceDiagnosisMessage" class="service-diagnosis-message">
+                </div>
+
+            </div>
+
+        </div>
     </div>
 
     <script>
         const bugForm = document.getElementById("bugForm");
         const analyzeButton = document.getElementById("analyzeButton");
         const clearButton = document.getElementById("clearButton");
+        const diagnosisButton = document.getElementById("diagnosisButton");
+        const diagnosisModal = document.getElementById("diagnosisModal");
+        const diagnosisCloseButton = document.getElementById("diagnosisCloseButton");
+        const serviceDiagnosisMessage = document.getElementById("serviceDiagnosisMessage");
 
         const resultCard = document.getElementById("resultCard");
         const resultGrid = document.getElementById("resultGrid");
@@ -1311,6 +1507,74 @@
         const batchClearButton = document.getElementById("batchClearButton");
         const batchAnalyzeButton = document.getElementById("batchAnalyzeButton");
         let resultContext = null;
+
+        async function checkAnalysisHealth() {
+            try {
+                const response = await fetch("/health/analysis", {
+                    method: "GET",
+                    cache: "no-store"
+                });
+
+                let data;
+
+                try {
+                    data = await response.json();
+                } catch {
+                    data = null;
+                }
+
+                if (!response.ok || !data) {
+                    return {
+                        available: false,
+                        reason: `Health check failed (HTTP ${response.status}).`
+                    };
+                }
+
+                return data;
+
+            } catch (error) {
+                return {
+                    available: false,
+                    reason: "Could not connect to the analysis service."
+                };
+            }
+        }
+
+        function getAnalysisDiagnosis(data) {
+            if (!data) {
+                return "No diagnostic information was returned.";
+            }
+
+            if (data.available) {
+                return "Analysis service is available.";
+            }
+
+            const lines = [];
+
+            if (data.provider) {
+                lines.push(`Provider: ${data.provider}`);
+            }
+
+            if (data.model) {
+                lines.push(`Model: ${data.model}`);
+            }
+
+            if (data.ollama?.status) {
+                lines.push(`Ollama status: ${data.ollama.status}`);
+            }
+
+            if (data.ollama?.reason) {
+                lines.push(`Reason: ${data.ollama.reason}`);
+            }
+
+            if (data.model_status) {
+                lines.push(`Model status: ${data.model_status}`);
+            }
+
+            return lines.length
+                ? lines.join("\n")
+                : "The analysis service is unavailable, but no detailed reason was provided.";
+        }
 
         singleBugMode.addEventListener("click", () => {
             singleBugMode.classList.add("active");
@@ -2066,29 +2330,88 @@
          */
 
         async function checkServiceStatus() {
-            statusDot.classList.remove("unavailable");
+            // Start with Checking state
+            statusDot.classList.remove("checking", "available", "unavailable");
             statusDot.classList.add("checking");
+
             serviceValue.textContent = "Checking...";
+            diagnosisButton.style.display = "none";
 
             try {
-                const response = await fetch("/health", {
-                    method: "GET",
-                    cache: "no-store"
-                });
+                const data = await checkAnalysisHealth();
 
-                if (!response.ok) {
-                    throw new Error("Service unavailable");
+                // Clear previous status
+                statusDot.classList.remove("checking", "available", "unavailable");
+
+                if (data.available) {
+                    // Available
+                    statusDot.classList.add("available");
+
+                    serviceValue.textContent = "Available";
+                    analyzeButton.disabled = false;
+                    diagnosisButton.style.display = "none";
+
+                    return;
                 }
 
-                statusDot.classList.remove("checking", "unavailable");
-                serviceValue.textContent = "Available";
+                // Unavailable
+                statusDot.classList.add("unavailable");
+
+                serviceValue.textContent = "Unavailable";
+                analyzeButton.disabled = true;
+                diagnosisButton.style.display = "flex";
+
+                serviceDiagnosisMessage.textContent =
+                    getAnalysisDiagnosis(data);
 
             } catch {
-                statusDot.classList.remove("checking");
+                // Unavailable because the service could not be reached
+                statusDot.classList.remove("checking", "available", "unavailable");
                 statusDot.classList.add("unavailable");
+
                 serviceValue.textContent = "Unavailable";
+                analyzeButton.disabled = true;
+                diagnosisButton.style.display = "flex";
+
+                serviceDiagnosisMessage.textContent =
+                    "Could not connect to the analysis service.";
             }
         }
+
+
+        /*
+         * Diagnosis modal
+         */
+
+        diagnosisButton.addEventListener("click", () => {
+            diagnosisModal.hidden = false;
+        });
+
+        diagnosisCloseButton.addEventListener("click", () => {
+            diagnosisModal.hidden = true;
+        });
+
+        document.querySelector(".diagnosis-modal-backdrop")
+            .addEventListener("click", () => {
+                diagnosisModal.hidden = true;
+            });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                diagnosisModal.hidden = true;
+            }
+        });
+
+        diagnosisModal.addEventListener("click", (event) => {
+            if (event.target === diagnosisModal) {
+                diagnosisModal.hidden = true;
+            }
+        });
+
+
+        /*
+         * Initial service check
+         */
 
         checkServiceStatus();
     </script>
