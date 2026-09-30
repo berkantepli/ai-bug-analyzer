@@ -331,21 +331,45 @@
 
         .batch-progress {
             margin-top: 16px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--card-secondary);
         }
 
-        .batch-progress-text {
+        .batch-progress-header {
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .batch-progress-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        #batchProgressPercentage {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        #batchProgressStatus.completed {
+            color: var(--accent);
+            font-weight: 700;
         }
 
         .batch-progress-bar {
             width: 100%;
-            height: 8px;
-            border-radius: 999px;
-            background: #2a2f3a;
+            height: 10px;
             overflow: hidden;
+            border-radius: 999px;
+            background: var(--border);
         }
 
         .batch-progress-fill {
@@ -354,6 +378,47 @@
             border-radius: 999px;
             background: #3b82f6;
             transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.35);
+        }
+
+        .batch-progress-fill::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -50%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg,
+                    transparent,
+                    rgba(255, 255, 255, 0.25),
+                    transparent);
+            animation: progressShimmer 1.5s infinite;
+        }
+
+        @keyframes progressShimmer {
+            100% {
+                left: 100%;
+            }
+        }
+
+        #batchProgress:has(#batchProgressStatus.completed) .batch-progress-fill::after {
+            animation: none;
+            display: none;
+        }
+
+        .batch-progress-details {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        #batchProgressTime {
+            font-variant-numeric: tabular-nums;
         }
 
         .service-left {
@@ -1414,6 +1479,20 @@
             opacity: 0.6;
             cursor: not-allowed;
         }
+
+        @keyframes analyzingDots {
+            0% {
+                opacity: 0.4;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.4;
+            }
+        }
     </style>
 </head>
 
@@ -1605,14 +1684,24 @@
                 </button>
 
                 <div id="batchProgress" class="batch-progress" hidden>
-                    <div class="batch-progress-text">
-                        <span id="batchProgressCount">0 / 0</span>
-                        <span id="batchProgressStatus">Preparing...</span>
+
+                    <div class="batch-progress-header">
+                        <div class="batch-progress-title">
+                            <span id="batchProgressStatus">Analyzing bug reports</span>
+                        </div>
+
+                        <span id="batchProgressPercentage">0%</span>
                     </div>
 
                     <div class="batch-progress-bar">
                         <div id="batchProgressFill" class="batch-progress-fill"></div>
                     </div>
+
+                    <div class="batch-progress-details">
+                        <span id="batchProgressCount">0 / 0 bugs analyzed</span>
+                        <span id="batchProgressTime">⏱ 00:00 elapsed</span>
+                    </div>
+
                 </div>
             </div>
 
@@ -2021,11 +2110,80 @@
         });
 
         batchClearButton.addEventListener("click", () => {
+            stopBatchTimer();
+
             batchFileInput.value = "";
             batchFileName.textContent = "No file chosen";
             batchAnalyzeButton.disabled = true;
             clearResults();
         });
+
+        let batchStartTime = null;
+        let batchTimerInterval = null;
+
+        function formatElapsedTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+
+            return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+        }
+
+        function startBatchTimer() {
+            batchStartTime = Date.now();
+
+            const updateTimer = () => {
+                const elapsedSeconds = Math.floor(
+                    (Date.now() - batchStartTime) / 1000
+                );
+
+                const timerElement = document.getElementById("batchProgressTime");
+
+                if (timerElement) {
+                    timerElement.textContent =
+                        `⏱ ${formatElapsedTime(elapsedSeconds)}`;
+                }
+            };
+
+            updateTimer();
+
+            batchTimerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function stopBatchTimer() {
+            if (batchTimerInterval) {
+                clearInterval(batchTimerInterval);
+                batchTimerInterval = null;
+            }
+        }
+
+        function stopAnalyzingDots() {
+            if (analyzingInterval) {
+                clearInterval(analyzingInterval);
+                analyzingInterval = null;
+            }
+        }
+
+        let analyzingDots = 0;
+        let analyzingInterval = null;
+
+        function startAnalyzingDots() {
+            if (analyzingInterval) {
+                return;
+            }
+
+            analyzingDots = 0;
+
+            analyzingInterval = setInterval(() => {
+                analyzingDots = (analyzingDots + 1) % 4;
+
+                const dots = ".".repeat(analyzingDots);
+                const statusElement = document.getElementById("batchProgressStatus");
+
+                if (statusElement) {
+                    statusElement.textContent = `Analyzing${dots}`;
+                }
+            }, 500);
+        }
 
         async function updateBatchProgress() {
             const response = await fetch("/bugs/batch/progress");
@@ -2036,28 +2194,41 @@
             const progressStatus = document.getElementById("batchProgressStatus");
             const progressFill = document.getElementById("batchProgressFill");
 
+            const progressPercentage = document.getElementById(
+                "batchProgressPercentage"
+            );
+
             progressBox.hidden = false;
 
             progressCount.textContent =
-                `${progress.completed} / ${progress.total}`;
+                `${progress.completed} / ${progress.total} bugs analyzed`;
 
             if (
                 progress.status === "completed" ||
                 progress.completed + progress.failed >= progress.total
             ) {
                 progressStatus.textContent = "Completed";
+                progressStatus.classList.add("completed");
+                stopBatchTimer();
+                stopAnalyzingDots();
+
             } else if (progress.status === "processing") {
-                progressStatus.textContent = "Analyzing...";
+                progressStatus.classList.remove("completed");
+                progressStatus.textContent = "Analyzing";
+                startAnalyzingDots();
             } else {
                 progressStatus.textContent = progress.status;
             }
-            
+
             const percentage =
                 progress.total > 0
                     ? (progress.completed / progress.total) * 100
                     : 0;
 
             progressFill.style.width = `${percentage}%`;
+
+            progressPercentage.textContent =
+                `${Math.round(percentage)}%`;
 
             return progress;
         }
@@ -2072,10 +2243,12 @@
                         progress.completed + progress.failed >= progress.total
                     ) {
                         clearInterval(interval);
+                        stopBatchTimer();
                     }
                 } catch (error) {
                     console.error("Progress update failed:", error);
                     clearInterval(interval);
+                    stopBatchTimer();
                 }
             }, 500);
         }
@@ -2085,6 +2258,7 @@
             if (!file) return;
 
             clearResults();
+            startBatchTimer();
             startBatchProgressPolling();
 
             batchAnalyzeButton.disabled = true;
