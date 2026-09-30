@@ -329,6 +329,33 @@
             color: var(--muted);
         }
 
+        .batch-progress {
+            margin-top: 16px;
+        }
+
+        .batch-progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .batch-progress-bar {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: #2a2f3a;
+            overflow: hidden;
+        }
+
+        .batch-progress-fill {
+            width: 0%;
+            height: 100%;
+            border-radius: 999px;
+            background: #3b82f6;
+            transition: width 0.3s ease;
+        }
+
         .service-left {
             display: flex;
             align-items: center;
@@ -1576,6 +1603,17 @@
                 <button id="batchAnalyzeButton" class="analyze-button" type="button" disabled>
                     Analyze Bugs
                 </button>
+
+                <div id="batchProgress" class="batch-progress" hidden>
+                    <div class="batch-progress-text">
+                        <span id="batchProgressCount">0 / 0</span>
+                        <span id="batchProgressStatus">Preparing...</span>
+                    </div>
+
+                    <div class="batch-progress-bar">
+                        <div id="batchProgressFill" class="batch-progress-fill"></div>
+                    </div>
+                </div>
             </div>
 
             <section id="resultCard" class="result-card">
@@ -1989,11 +2027,66 @@
             clearResults();
         });
 
+        async function updateBatchProgress() {
+            const response = await fetch("/bugs/batch/progress");
+            const progress = await response.json();
+
+            const progressBox = document.getElementById("batchProgress");
+            const progressCount = document.getElementById("batchProgressCount");
+            const progressStatus = document.getElementById("batchProgressStatus");
+            const progressFill = document.getElementById("batchProgressFill");
+
+            progressBox.hidden = false;
+
+            progressCount.textContent =
+                `${progress.completed} / ${progress.total}`;
+
+            if (
+                progress.status === "completed" ||
+                progress.completed + progress.failed >= progress.total
+            ) {
+                progressStatus.textContent = "Completed";
+            } else if (progress.status === "processing") {
+                progressStatus.textContent = "Analyzing...";
+            } else {
+                progressStatus.textContent = progress.status;
+            }
+            
+            const percentage =
+                progress.total > 0
+                    ? (progress.completed / progress.total) * 100
+                    : 0;
+
+            progressFill.style.width = `${percentage}%`;
+
+            return progress;
+        }
+
+        async function startBatchProgressPolling() {
+            const interval = setInterval(async () => {
+                try {
+                    const progress = await updateBatchProgress();
+
+                    if (
+                        progress.status === "completed" ||
+                        progress.completed + progress.failed >= progress.total
+                    ) {
+                        clearInterval(interval);
+                    }
+                } catch (error) {
+                    console.error("Progress update failed:", error);
+                    clearInterval(interval);
+                }
+            }, 500);
+        }
+
         batchAnalyzeButton.addEventListener("click", async () => {
             const file = batchFileInput.files[0];
             if (!file) return;
 
             clearResults();
+            startBatchProgressPolling();
+
             batchAnalyzeButton.disabled = true;
             batchAnalyzeButton.innerHTML = `
                 <span class="loading"><span class="spinner"></span>Reading Excel...</span>
