@@ -1,8 +1,9 @@
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, Form, UploadFile
 
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
 from app.services.bug_analyzer import analyze_bug_report
+from app.services.llm_analyzer import analyze_with_llm
 from app.services.batch_analyzer import parse_bug_spreadsheet
 
 
@@ -18,8 +19,28 @@ def create_bug(bug: BugReportCreate):
 
 
 @router.post("/analyze", response_model=BugAnalysis)
-def analyze_bug(bug: BugReportCreate):
-    return analyze_bug_report(bug)
+async def analyze_bug(
+    title: str = Form(...),
+    description: str = Form(...),
+    steps_to_reproduce: str = Form(...),
+    expected_result: str = Form(...),
+    actual_result: str = Form(...),
+    screenshots: list[UploadFile] = File(default=[]),
+):
+    bug = BugReportCreate(
+        title=title,
+        description=description,
+        steps_to_reproduce=[
+            step.strip() for step in steps_to_reproduce.splitlines() if step.strip()
+        ],
+        expected_result=expected_result,
+        actual_result=actual_result,
+    )
+
+    return await analyze_with_llm(
+        bug,
+        screenshots,
+    )
 
 
 @router.post("/batch")
