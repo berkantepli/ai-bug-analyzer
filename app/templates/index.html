@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Bug Analyzer</title>
-
+    <link rel="icon" type="image/png" href="/static/images/logo.png">
     <style>
         * {
             box-sizing: border-box;
@@ -653,7 +653,7 @@
             border: 1px solid var(--border);
             border-radius: 18px;
             background: var(--card);
-            overflow: hidden;
+            overflow: visible;
         }
 
         .batch-bug-header {
@@ -761,6 +761,45 @@
         }
 
         .summary-chip.severity-low {
+            border-color: var(--low-border);
+            background: var(--low-bg);
+            color: var(--low-text);
+        }
+
+        .severity-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 10px;
+            border: 1px solid;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            vertical-align: middle;
+            position: relative;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .severity-badge.severity-critical {
+            border-color: var(--critical-border);
+            background: var(--critical-bg);
+            color: var(--critical-text);
+        }
+
+        .severity-badge.severity-high {
+            border-color: var(--high-border);
+            background: var(--high-bg);
+            color: var(--high-text);
+        }
+
+        .severity-badge.severity-medium {
+            border-color: var(--medium-border);
+            background: var(--medium-bg);
+            color: var(--medium-text);
+        }
+
+        .severity-badge.severity-low {
             border-color: var(--low-border);
             background: var(--low-bg);
             color: var(--low-text);
@@ -2709,6 +2748,12 @@
 
             errorCard.classList.remove("visible");
             errorMessage.textContent = "";
+
+            const batchProgress = document.getElementById("batchProgress");
+            if (batchProgress) {
+                batchProgress.hidden = true;
+            }
+
             resultContext = null;
         }
 
@@ -2999,7 +3044,7 @@
 
             resultHeading.textContent = `Batch Analysis Result (${data.bugs.length} bugs)`;
             const labels = {
-                severity: "Severity",
+                confidence: "Confidence",
                 priority: "Priority",
                 category: "Category",
                 impact: "Impact",
@@ -3085,26 +3130,20 @@
 
                 heading.appendChild(title);
 
-                const confidence = analysis.confidence;
+                const severity = analysis.severity;
 
-                if (confidence !== undefined && confidence !== null) {
-                    const confidenceBadge = document.createElement("span");
-                    confidenceBadge.className = "confidence-badge";
+                if (severity !== undefined && severity !== null) {
+                    const severityBadge = document.createElement("span");
+                    severityBadge.className = `severity-badge severity-${String(severity).toLowerCase()}`;
+                    severityBadge.textContent = severity;
 
-                    const confidenceValue =
-                        typeof confidence === "number"
-                            ? `${Math.round(confidence * 100)}%`
-                            : confidence;
+                    const severityTooltip =
+                        "How much impact the bug has on the system or user experience. Critical issues may block a major function or make the application unusable.";
 
-                    confidenceBadge.textContent = `Confidence: ${confidenceValue}`;
+                    severityBadge.setAttribute("data-tooltip", severityTooltip);
+                    severityBadge.setAttribute("aria-label", severityTooltip);
 
-                    const confidenceTooltip =
-                        "Indicates how confident the analysis is based on the information provided in the bug report. Higher confidence means the available information provides stronger support for the analysis.";
-
-                    confidenceBadge.setAttribute("data-tooltip", confidenceTooltip);
-                    confidenceBadge.setAttribute("aria-label", confidenceTooltip);
-
-                    heading.appendChild(confidenceBadge);
+                    heading.appendChild(severityBadge);
                 }
 
                 bugCard.appendChild(heading);
