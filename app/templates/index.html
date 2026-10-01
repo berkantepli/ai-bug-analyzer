@@ -2720,11 +2720,11 @@
                     category:
                         "The type of problem identified in the bug report. Examples include Functional, UI, Performance, Security, Compatibility, and Data.",
 
+                    impact:
+                        "Describes how the bug affects users, business operations, system functionality, or the overall user experience.",
+
                     possible_root_cause:
                         "A likely technical or logical reason behind the observed bug. This is an analysis hypothesis and may require further investigation.",
-
-                    suggested_test_scenarios:
-                        "Recommended test cases to reproduce, verify, and validate the bug and its fix. These may include positive, negative, boundary, and regression scenarios.",
 
                     missing_information:
                         "Important details that are missing from the bug report and could help QA investigate, reproduce, or validate the issue more effectively.",
@@ -2766,7 +2766,18 @@
                 const labelText = document.createElement("span");
                 labelText.textContent = "Suggested Test Scenarios";
 
+                const info = document.createElement("span");
+                info.className = "info-tooltip";
+                info.textContent = "i";
+
+                const tooltipText =
+                    "AI-generated test scenarios designed to validate the reported bug and verify the expected behavior after the fix. Each scenario includes the test case, expected result, purpose, category, and priority.";
+
+                info.setAttribute("data-tooltip", tooltipText);
+                info.setAttribute("aria-label", tooltipText);
+
                 label.appendChild(labelText);
+                label.appendChild(info);
 
                 const scenarios = document.createElement("div");
                 scenarios.className = "test-scenarios";
