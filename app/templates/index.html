@@ -2889,9 +2889,9 @@
                 severity: "Severity",
                 priority: "Priority",
                 category: "Category",
+                impact: "Impact",
                 possible_root_cause: "Possible Root Cause",
-                suggested_test_scenarios: "Suggested Test Scenarios",
-                missing_information: "Missing Information",
+                missing_information: "Missing Information"
             };
 
             const analyses = data.bugs
@@ -3000,9 +3000,15 @@
                 Object.entries(labels).forEach(([key, labelText]) => {
                     const item = document.createElement("div");
                     item.className = "result-item";
+
                     const label = document.createElement("div");
                     label.className = "result-label";
-                    label.textContent = labelText;
+
+                    const labelTextElement = document.createElement("span");
+                    labelTextElement.textContent = labelText;
+
+                    label.appendChild(labelTextElement);
+
                     const tooltipTexts = {
                         severity:
                             "How much impact the bug has on the system or user experience. Critical issues may block a major function or make the application unusable.",
@@ -3013,14 +3019,17 @@
                         category:
                             "The type of problem identified in the bug report. Examples include Functional, UI, Performance, Security, Compatibility, and Data.",
 
+                        impact:
+                            "Describes how the bug affects users, business operations, system functionality, or the overall user experience.",
+
                         possible_root_cause:
                             "A likely technical or logical reason behind the observed bug. This is an analysis hypothesis and may require further investigation.",
 
-                        suggested_test_scenarios:
-                            "Recommended test cases to reproduce, verify, and validate the bug and its fix. These may include positive, negative, boundary, and regression scenarios.",
-
                         missing_information:
-                            "Important details that are missing from the bug report and could help QA investigate, reproduce, or validate the issue more effectively."
+                            "Important details that are missing from the bug report and could help QA investigate, reproduce, or validate the issue more effectively.",
+
+                        confidence:
+                            "Indicates how confident the analysis is based on the information provided in the bug report. Higher confidence means the available information provides stronger support for the analysis."
                     };
 
                     const tooltipText = tooltipTexts[key];
@@ -3035,12 +3044,123 @@
 
                         label.appendChild(info);
                     }
+
                     const value = document.createElement("div");
                     value.className = "result-value";
                     value.textContent = formatAnalysisValue(key, analysis[key]);
-                    item.append(label, value);
+
+                    item.appendChild(label);
+                    item.appendChild(value);
+
                     resultGrid.appendChild(item);
                 });
+                const suggestedScenarios = analysis.suggested_test_scenarios;
+
+                if (Array.isArray(suggestedScenarios) && suggestedScenarios.length) {
+                    const scenariosCard = document.createElement("div");
+                    scenariosCard.className = "result-item suggested-scenarios-card";
+
+                    const label = document.createElement("div");
+                    label.className = "result-label";
+
+                    const labelText = document.createElement("span");
+                    labelText.textContent = "Suggested Test Scenarios";
+
+                    const info = document.createElement("span");
+                    info.className = "info-tooltip";
+                    info.textContent = "i";
+
+                    const tooltipText =
+                        "AI-generated test scenarios designed to validate the reported bug and verify the expected behavior after the fix. Each scenario includes the test case, expected result, purpose, category, and priority.";
+
+                    info.setAttribute("data-tooltip", tooltipText);
+                    info.setAttribute("aria-label", tooltipText);
+
+                    label.appendChild(labelText);
+                    label.appendChild(info);
+
+                    const scenarios = document.createElement("div");
+                    scenarios.className = "test-scenarios";
+
+                    suggestedScenarios.forEach((testCase) => {
+                        const scenario = document.createElement("div");
+                        scenario.className = "test-scenario";
+
+                        const header = document.createElement("div");
+                        header.className = "test-scenario-header";
+
+                        const id = document.createElement("span");
+                        id.className = "test-case-id";
+                        id.textContent = testCase.test_case_id || "Test Case";
+
+                        const meta = document.createElement("div");
+                        meta.className = "test-case-meta";
+                        meta.textContent = testCase.category || "QA Validation";
+
+                        const priority = document.createElement("span");
+                        priority.className =
+                            `test-case-priority ${(testCase.priority || "Medium").toLowerCase()}`;
+                        priority.textContent = testCase.priority || "Medium";
+
+                        header.appendChild(id);
+                        header.appendChild(meta);
+                        header.appendChild(priority);
+
+                        const scenarioSection = document.createElement("div");
+                        scenarioSection.className = "test-case-section";
+
+                        const scenarioLabel = document.createElement("div");
+                        scenarioLabel.className = "test-case-section-label";
+                        scenarioLabel.textContent = "Scenario";
+
+                        const scenarioText = document.createElement("div");
+                        scenarioText.className = "test-case-section-text";
+                        scenarioText.textContent = testCase.scenario || "";
+
+                        scenarioSection.appendChild(scenarioLabel);
+                        scenarioSection.appendChild(scenarioText);
+
+                        const expectedSection = document.createElement("div");
+                        expectedSection.className = "test-case-section";
+
+                        const expectedLabel = document.createElement("div");
+                        expectedLabel.className = "test-case-section-label";
+                        expectedLabel.textContent = "Expected Result";
+
+                        const expectedText = document.createElement("div");
+                        expectedText.className = "test-case-section-text";
+                        expectedText.textContent = testCase.expected_result || "";
+
+                        expectedSection.appendChild(expectedLabel);
+                        expectedSection.appendChild(expectedText);
+
+                        const purposeSection = document.createElement("div");
+                        purposeSection.className = "test-case-section";
+
+                        const purposeLabel = document.createElement("div");
+                        purposeLabel.className = "test-case-section-label";
+                        purposeLabel.textContent = "Purpose";
+
+                        const purposeText = document.createElement("div");
+                        purposeText.className = "test-case-section-text";
+                        purposeText.textContent = testCase.purpose || "";
+
+                        purposeSection.appendChild(purposeLabel);
+                        purposeSection.appendChild(purposeText);
+
+                        scenario.appendChild(header);
+                        scenario.appendChild(scenarioSection);
+                        scenario.appendChild(expectedSection);
+                        scenario.appendChild(purposeSection);
+
+                        scenarios.appendChild(scenario);
+                    });
+
+                    scenariosCard.appendChild(label);
+                    scenariosCard.appendChild(scenarios);
+
+                    resultGrid.appendChild(scenariosCard);
+                }
             });
             resultCard.classList.add("visible");
             resultContext = { mode: "batch", type: "result" };
