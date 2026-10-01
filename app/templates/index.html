@@ -648,6 +648,52 @@
             gap: 12px;
         }
 
+        .batch-bug-card {
+            grid-column: 1 / -1;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: var(--card);
+            overflow: hidden;
+        }
+
+        .batch-bug-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 18px 24px;
+            cursor: pointer;
+        }
+
+        .batch-bug-title {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .batch-bug-content {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            padding: 0 24px 24px;
+        }
+
+        .batch-bug-header::before {
+            content: "›";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            color: var(--text-secondary);
+            font-size: 20px;
+            line-height: 1;
+            transition: transform 0.15s ease;
+        }
+
+        .batch-bug-card:has(.batch-bug-content:not([hidden])) .batch-bug-header::before {
+            transform: rotate(90deg);
+        }
+
         .batch-summary {
             grid-column: 1 / -1;
             display: grid;
@@ -762,12 +808,6 @@
             font-weight: 800;
             letter-spacing: 0.7px;
             text-transform: uppercase;
-        }
-
-        .visual-evidence-label::before {
-            content: "◉";
-            color: var(--primary);
-            font-size: 9px;
         }
 
         .visual-evidence-value {
@@ -1494,12 +1534,56 @@
             }
         }
 
+        /* Suggested Test Scenarios */
+
         .suggested-scenarios-card {
             grid-column: 1 / -1;
+            width: 100%;
+            margin-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .suggested-scenarios-header {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            padding: 14px 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .suggested-scenarios-header-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .suggested-scenarios-arrow {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            color: var(--muted);
+            font-size: 20px;
+            line-height: 1;
+            transition: transform 0.15s ease;
+        }
+
+        .suggested-scenarios-card.is-open .suggested-scenarios-arrow {
+            transform: rotate(90deg);
+        }
+
+        .suggested-scenarios-card:not(.is-open) .test-scenarios {
+            display: none;
         }
 
         .test-scenarios {
             width: 100%;
+            padding: 0 18px 18px;
         }
 
         .test-scenario {
@@ -1528,6 +1612,7 @@
             font-size: 13px;
             font-weight: 500;
             flex: 1;
+            color: var(--muted);
         }
 
         .test-case-section {
@@ -1536,7 +1621,7 @@
 
         .test-case-section-label {
             margin-bottom: 6px;
-            color: var(--text-secondary);
+            color: var(--muted);
             font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.08em;
@@ -1544,7 +1629,7 @@
         }
 
         .test-case-section-text {
-            color: var(--text-primary);
+            color: var(--text);
             font-size: 14px;
             line-height: 1.55;
         }
@@ -1558,6 +1643,7 @@
             font-size: 12px;
             font-weight: 500;
             line-height: 1.2;
+            flex-shrink: 0;
         }
 
         .test-case-priority.high {
@@ -1575,8 +1661,7 @@
         .test-case-priority.critical {
             color: #ff6b6b;
             background: rgba(239, 68, 68, 0.12);
-            border: 1px solid rgba(239, 68, 68, 0.40);
-            border-radius: 7px;
+            border-color: rgba(239, 68, 68, 0.40);
         }
 
         .test-case-priority.low {
@@ -1803,7 +1888,14 @@
                 <div id="resultGrid" class="result-grid"></div>
 
                 <div id="visualEvidenceSection" class="visual-evidence-section" hidden>
-                    <div class="visual-evidence-label">Visual Evidence</div>
+                    <div class="visual-evidence-label">
+                        <span>Visual Evidence</span>
+                        <span class="info-tooltip"
+                            data-tooltip="AI-generated visual analysis based on the uploaded screenshot. It highlights visible UI elements, states, or visual details that may support the reported bug."
+                            aria-label="AI-generated visual analysis based on the uploaded screenshot. It highlights visible UI elements, states, or visual details that may support the reported bug.">
+                            i
+                        </span>
+                    </div>
                     <div id="visualEvidenceValue" class="visual-evidence-value"></div>
                 </div>
 
@@ -2758,10 +2850,18 @@
 
             if (Array.isArray(suggestedScenarios) && suggestedScenarios.length) {
                 const scenariosCard = document.createElement("div");
-                scenariosCard.className = "result-item suggested-scenarios-card";
+                scenariosCard.className = "suggested-scenarios-card";
 
-                const label = document.createElement("div");
-                label.className = "result-label";
+                // Accordion header
+                const accordionHeader = document.createElement("div");
+                accordionHeader.className = "suggested-scenarios-header";
+
+                const headerLeft = document.createElement("div");
+                headerLeft.className = "suggested-scenarios-header-left";
+
+                const arrow = document.createElement("span");
+                arrow.className = "suggested-scenarios-arrow";
+                arrow.textContent = "›";
 
                 const labelText = document.createElement("span");
                 labelText.textContent = "Suggested Test Scenarios";
@@ -2776,11 +2876,16 @@
                 info.setAttribute("data-tooltip", tooltipText);
                 info.setAttribute("aria-label", tooltipText);
 
-                label.appendChild(labelText);
-                label.appendChild(info);
+                headerLeft.appendChild(arrow);
+                headerLeft.appendChild(labelText);
+                headerLeft.appendChild(info);
 
+                accordionHeader.appendChild(headerLeft);
+
+                // Accordion content
                 const scenarios = document.createElement("div");
                 scenarios.className = "test-scenarios";
+                scenarios.hidden = true;
 
                 suggestedScenarios.forEach((testCase) => {
                     const scenario = document.createElement("div");
@@ -2798,7 +2903,8 @@
                     meta.textContent = testCase.category || "QA Validation";
 
                     const priority = document.createElement("span");
-                    priority.className = `test-case-priority ${(testCase.priority || "Medium").toLowerCase()}`;
+                    priority.className =
+                        `test-case-priority ${(testCase.priority || "Medium").toLowerCase()}`;
                     priority.textContent = testCase.priority || "Medium";
 
                     header.appendChild(id);
@@ -2848,7 +2954,6 @@
                     purposeSection.appendChild(purposeText);
 
                     scenario.appendChild(header);
-
                     scenario.appendChild(scenarioSection);
                     scenario.appendChild(expectedSection);
                     scenario.appendChild(purposeSection);
@@ -2856,9 +2961,17 @@
                     scenarios.appendChild(scenario);
                 });
 
-                scenariosCard.appendChild(label);
+                scenariosCard.appendChild(accordionHeader);
                 scenariosCard.appendChild(scenarios);
 
+                // Closed by default
+                accordionHeader.addEventListener("click", () => {
+                    scenarios.hidden = !scenarios.hidden;
+                    scenariosCard.classList.toggle("is-open", !scenarios.hidden);
+                });
+
+                // IMPORTANT:
+                // Keep Suggested Test Scenarios inside the current bug card
                 resultGrid.appendChild(scenariosCard);
             }
 
@@ -2960,17 +3073,17 @@
                     return;
                 }
 
-                const heading = document.createElement("h3");
-                heading.style.gridColumn = "1 / -1";
-                heading.style.margin = index ? "18px 0 0" : "0";
-                heading.style.display = "flex";
-                heading.style.alignItems = "center";
-                heading.style.gap = "10px";
+                const bugCard = document.createElement("details");
+                bugCard.className = "batch-bug-card";
+
+                const heading = document.createElement("summary");
+                heading.className = "batch-bug-header";
 
                 const title = document.createElement("span");
+                title.className = "batch-bug-title";
                 title.textContent = `Bug ${index + 1}: ${bug.title || "Untitled"}`;
-                title.style.flex = "1";
-                title.style.minWidth = "0";
+
+                heading.appendChild(title);
 
                 const confidence = analysis.confidence;
 
@@ -2991,11 +3104,13 @@
                     confidenceBadge.setAttribute("data-tooltip", confidenceTooltip);
                     confidenceBadge.setAttribute("aria-label", confidenceTooltip);
 
-                    heading.appendChild(title);
                     heading.appendChild(confidenceBadge);
                 }
 
-                resultGrid.appendChild(heading);
+                bugCard.appendChild(heading);
+
+                const bugContent = document.createElement("div");
+                bugContent.className = "batch-bug-content";
 
                 Object.entries(labels).forEach(([key, labelText]) => {
                     const item = document.createElement("div");
@@ -3049,19 +3164,35 @@
                     value.className = "result-value";
                     value.textContent = formatAnalysisValue(key, analysis[key]);
 
-                    item.appendChild(label);
-                    item.appendChild(value);
-
-                    resultGrid.appendChild(item);
+                    item.append(label, value);
+                    bugContent.appendChild(item);
                 });
+
+                bugCard.appendChild(bugContent);
+
+                bugContent.hidden = true;
+
+                heading.addEventListener("click", () => {
+                    bugContent.hidden = !bugContent.hidden;
+                });
+
+
                 const suggestedScenarios = analysis.suggested_test_scenarios;
 
                 if (Array.isArray(suggestedScenarios) && suggestedScenarios.length) {
                     const scenariosCard = document.createElement("div");
-                    scenariosCard.className = "result-item suggested-scenarios-card";
+                    scenariosCard.className = "suggested-scenarios-card";
 
-                    const label = document.createElement("div");
-                    label.className = "result-label";
+                    // Accordion header
+                    const accordionHeader = document.createElement("div");
+                    accordionHeader.className = "suggested-scenarios-header";
+
+                    const headerLeft = document.createElement("div");
+                    headerLeft.className = "suggested-scenarios-header-left";
+
+                    const arrow = document.createElement("span");
+                    arrow.className = "suggested-scenarios-arrow";
+                    arrow.textContent = "›";
 
                     const labelText = document.createElement("span");
                     labelText.textContent = "Suggested Test Scenarios";
@@ -3076,11 +3207,16 @@
                     info.setAttribute("data-tooltip", tooltipText);
                     info.setAttribute("aria-label", tooltipText);
 
-                    label.appendChild(labelText);
-                    label.appendChild(info);
+                    headerLeft.appendChild(arrow);
+                    headerLeft.appendChild(labelText);
+                    headerLeft.appendChild(info);
 
+                    accordionHeader.appendChild(headerLeft);
+
+                    // Accordion content
                     const scenarios = document.createElement("div");
                     scenarios.className = "test-scenarios";
+                    scenarios.hidden = true;
 
                     suggestedScenarios.forEach((testCase) => {
                         const scenario = document.createElement("div");
@@ -3098,8 +3234,11 @@
                         meta.textContent = testCase.category || "QA Validation";
 
                         const priority = document.createElement("span");
-                        priority.className =
-                            `test-case-priority ${(testCase.priority || "Medium").toLowerCase()}`;
+                        const priorityValue = String(
+                            testCase.priority || "Medium"
+                        ).toLowerCase();
+
+                        priority.className = `test-case-priority ${priorityValue}`;
                         priority.textContent = testCase.priority || "Medium";
 
                         header.appendChild(id);
@@ -3156,11 +3295,23 @@
                         scenarios.appendChild(scenario);
                     });
 
-                    scenariosCard.appendChild(label);
+                    scenariosCard.appendChild(accordionHeader);
                     scenariosCard.appendChild(scenarios);
 
-                    resultGrid.appendChild(scenariosCard);
+                    // Closed by default
+                    accordionHeader.addEventListener("click", () => {
+                        scenarios.hidden = !scenarios.hidden;
+                        scenariosCard.classList.toggle(
+                            "is-open",
+                            !scenarios.hidden
+                        );
+                    });
+
+                    // IMPORTANT:
+                    // Keep Suggested Test Scenarios inside the current bug card
+                    bugContent.appendChild(scenariosCard);
                 }
+                resultGrid.appendChild(bugCard);
             });
             resultCard.classList.add("visible");
             resultContext = { mode: "batch", type: "result" };
