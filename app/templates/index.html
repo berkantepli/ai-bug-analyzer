@@ -1493,6 +1493,99 @@
                 opacity: 0.4;
             }
         }
+
+        .suggested-scenarios-item {
+            grid-column: 1 / -1;
+            width: 100%;
+            margin-top: 24px;
+        }
+
+        .test-scenarios {
+            width: 100%;
+        }
+
+        .test-scenario {
+            width: 100%;
+            padding: 24px 0;
+        }
+
+        .test-scenario+.test-scenario {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .test-scenario-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 10px;
+        }
+
+        .test-case-id {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .test-case-meta {
+            margin-bottom: 18px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .test-case-section {
+            margin-top: 16px;
+        }
+
+        .test-case-label {
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .test-case-text {
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.55;
+        }
+
+        .test-case-priority {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 9px;
+            border-radius: 7px;
+            border: 1px solid;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.2;
+        }
+
+        .test-case-priority.high {
+            color: #ff8f8f;
+            background: rgba(239, 68, 68, 0.10);
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+
+        .test-case-priority.medium {
+            color: #f5c451;
+            background: rgba(234, 179, 8, 0.10);
+            border-color: rgba(234, 179, 8, 0.35);
+        }
+
+        .test-case-priority.critical {
+            color: #ff6b6b;
+            background: rgba(239, 68, 68, 0.12);
+            border: 1px solid rgba(239, 68, 68, 0.40);
+            border-radius: 7px;
+        }
+
+        .test-case-priority.low {
+            color: #7dd3fc;
+            background: rgba(14, 165, 233, 0.10);
+            border-color: rgba(14, 165, 233, 0.35);
+        }
     </style>
 </head>
 
@@ -2651,7 +2744,84 @@
 
                 const valueElement = document.createElement("div");
                 valueElement.className = "result-value";
-                valueElement.textContent = formatAnalysisValue(key, value);
+
+                if (key === "suggested_test_scenarios" && Array.isArray(value)) {
+                    value.forEach((testCase) => {
+                        const scenario = document.createElement("div");
+                        scenario.className = "test-scenario";
+
+                        const header = document.createElement("div");
+                        header.className = "test-scenario-header";
+
+                        const id = document.createElement("span");
+                        id.className = "test-case-id";
+                        id.textContent = testCase.test_case_id || "Test Case";
+
+                        const priority = document.createElement("span");
+                        priority.className =
+                            `test-case-priority ${(testCase.priority || "Medium").toLowerCase()}`;
+                        priority.textContent = testCase.priority || "Medium";
+
+                        header.appendChild(id);
+                        header.appendChild(priority);
+
+                        const meta = document.createElement("div");
+                        meta.className = "test-case-meta";
+                        meta.textContent = testCase.category || "";
+
+                        const scenarioSection = document.createElement("div");
+                        scenarioSection.className = "test-case-section";
+
+                        const scenarioLabel = document.createElement("div");
+                        scenarioLabel.className = "test-case-label";
+                        scenarioLabel.textContent = "Scenario";
+
+                        const scenarioText = document.createElement("div");
+                        scenarioText.className = "test-case-text";
+                        scenarioText.textContent = testCase.scenario || "";
+
+                        scenarioSection.appendChild(scenarioLabel);
+                        scenarioSection.appendChild(scenarioText);
+
+                        const expectedSection = document.createElement("div");
+                        expectedSection.className = "test-case-section";
+
+                        const expectedLabel = document.createElement("div");
+                        expectedLabel.className = "test-case-label";
+                        expectedLabel.textContent = "Expected Result";
+
+                        const expectedText = document.createElement("div");
+                        expectedText.className = "test-case-text";
+                        expectedText.textContent = testCase.expected_result || "";
+
+                        expectedSection.appendChild(expectedLabel);
+                        expectedSection.appendChild(expectedText);
+
+                        const purposeSection = document.createElement("div");
+                        purposeSection.className = "test-case-section";
+
+                        const purposeLabel = document.createElement("div");
+                        purposeLabel.className = "test-case-label";
+                        purposeLabel.textContent = "Purpose";
+
+                        const purposeText = document.createElement("div");
+                        purposeText.className = "test-case-text";
+                        purposeText.textContent = testCase.purpose || "";
+
+                        purposeSection.appendChild(purposeLabel);
+                        purposeSection.appendChild(purposeText);
+
+                        scenario.appendChild(header);
+                        scenario.appendChild(meta);
+                        scenario.appendChild(scenarioSection);
+                        scenario.appendChild(expectedSection);
+                        scenario.appendChild(purposeSection);
+
+                        valueElement.appendChild(scenario);
+                    });
+                } else {
+                    valueElement.textContent = formatAnalysisValue(key, value);
+                }
 
                 item.appendChild(label);
                 item.appendChild(valueElement);
@@ -2961,16 +3131,40 @@
             fields.bugTitle.input.focus();
         });
 
+        function updateServiceStatusUI(available) {
+            statusDot.classList.remove(
+                "checking",
+                "available",
+                "unavailable"
+            );
+
+            if (available) {
+                statusDot.classList.add("available");
+
+                serviceValue.textContent = "Available";
+                analyzeButton.disabled = false;
+
+                diagnosisButton.textContent = "✓";
+                diagnosisButton.classList.add("diagnosis-available");
+                diagnosisButton.style.display = "flex";
+
+            } else {
+                statusDot.classList.add("unavailable");
+
+                serviceValue.textContent = "Unavailable";
+                analyzeButton.disabled = true;
+
+                diagnosisButton.classList.remove("diagnosis-available");
+                diagnosisButton.textContent = "⚠";
+                diagnosisButton.style.display = "flex";
+            }
+        }
+
         /*
          * Health check
          */
 
-        /*
- * Health check
- */
-
         async function checkServiceStatus() {
-            // Start with Checking state
             statusDot.classList.remove(
                 "checking",
                 "available",
@@ -2985,80 +3179,42 @@
             try {
                 const data = await checkAnalysisHealth();
 
-                // Clear previous status
-                statusDot.classList.remove(
-                    "checking",
-                    "available",
-                    "unavailable"
-                );
+                updateServiceStatusUI(data.available);
 
                 if (data.available) {
-                    // Analysis service is available
-                    statusDot.classList.add("available");
-
-                    serviceValue.textContent = "Available";
-                    analyzeButton.disabled = false;
-
-                    // Diagnosis is always available
-                    diagnosisButton.textContent = "✓";
-                    diagnosisButton.classList.add("diagnosis-available");
-                    diagnosisButton.style.display = "flex";
-
                     return;
                 }
 
-                // Analysis service is unavailable
-                // Analysis service is unavailable
-                statusDot.classList.add("unavailable");
-
-                serviceValue.textContent = "Unavailable";
-                analyzeButton.disabled = true;
-
-                diagnosisButton.classList.remove("diagnosis-available");
-                diagnosisButton.textContent = "⚠";
-                diagnosisButton.style.display = "flex";
-
-                // Get detailed diagnosis
                 const diagnosisData = await getAnalysisDiagnosisData();
 
                 serviceDiagnosisMessage.innerHTML =
                     getAnalysisDiagnosis(diagnosisData);
 
             } catch (error) {
-                statusDot.classList.remove(
-                    "checking",
-                    "available",
-                    "unavailable"
-                );
 
-                serviceValue.textContent = "Unavailable";
-                analyzeButton.disabled = true;
-
-                diagnosisButton.classList.remove("diagnosis-available");
-                diagnosisButton.textContent = "⚠";
-                diagnosisButton.style.display = "flex";
+                updateServiceStatusUI(false);
 
                 serviceDiagnosisMessage.innerHTML = `
-    <div class="diagnosis-item">
-        <div class="diagnosis-item-header">
+            <div class="diagnosis-item">
+                <div class="diagnosis-item-header">
 
-            <span class="diagnosis-status-dot unavailable"></span>
+                    <span class="diagnosis-status-dot unavailable"></span>
 
-            <span class="diagnosis-item-title">
-                Connection Check
-            </span>
+                    <span class="diagnosis-item-title">
+                        Connection Check
+                    </span>
 
-            <span class="diagnosis-status-text unavailable">
-                Failed
-            </span>
+                    <span class="diagnosis-status-text unavailable">
+                        Failed
+                    </span>
 
-        </div>
+                </div>
 
-        <div class="diagnosis-item-message">
-            Could not connect to the analysis service.
-        </div>
-    </div>
-`;
+                <div class="diagnosis-item-message">
+                    Could not connect to the analysis service.
+                </div>
+            </div>
+        `;
             }
         }
 
@@ -3117,7 +3273,8 @@
                     serviceValue.textContent = "Available";
                     analyzeButton.disabled = false;
 
-                    // Diagnosis button remains visible
+                    diagnosisButton.textContent = "✓";
+                    diagnosisButton.classList.add("diagnosis-available");
                     diagnosisButton.style.display = "flex";
 
                 } else {
@@ -3132,6 +3289,8 @@
                     serviceValue.textContent = "Unavailable";
                     analyzeButton.disabled = true;
 
+                    diagnosisButton.classList.remove("diagnosis-available");
+                    diagnosisButton.textContent = "⚠";
                     diagnosisButton.style.display = "flex";
                 }
 

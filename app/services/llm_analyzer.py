@@ -85,6 +85,7 @@ Your analysis must contain exactly these fields:
 - severity
 - priority
 - category
+- impact
 - possible_root_cause
 - suggested_test_scenarios
 - missing_information
@@ -107,23 +108,71 @@ Rules:
 
 3. category should describe the functional area of the bug.
 
-4. possible_root_cause is a hypothesis, not a confirmed fact.
+4. impact must describe the concrete effect of the bug on the
+   user, system, business flow, or affected functionality.
+   Do not simply repeat the bug description.
+
+5. possible_root_cause is a hypothesis, not a confirmed fact.
    Do not present assumptions as proven causes.
 
-5. suggested_test_scenarios must contain useful QA test scenarios
-   related to this bug.
+6. suggested_test_scenarios must contain useful QA test scenarios
+related to this bug.
 
-6. missing_information must contain important information that is
+Each test scenario must contain exactly these fields:
+- test_case_id
+- category
+- type
+- scenario
+- expected_result
+- purpose
+- priority
+
+test_case_id must use sequential IDs such as:
+TC-01, TC-02, TC-03.
+
+category must describe the primary QA focus of the test.
+Examples include:
+- Functional Validation
+- Input Validation
+- UI Validation
+- API Validation
+- Error Handling
+- Authentication
+- Authorization
+- Performance
+- Regression
+
+Use the category that best matches the actual bug.
+Do not force a category that is not relevant.
+
+scenario must describe what the tester should perform.
+
+expected_result must describe the observable result that should
+occur when the test is executed successfully.
+
+purpose must briefly explain why this test is relevant to the
+reported bug.
+
+priority must be exactly one of:
+- Low
+- Medium
+- High
+-Critical
+
+Assign priority based on the importance of validating the
+specific scenario, not the overall bug severity.
+
+7. missing_information must contain important information that is
    genuinely missing from the bug report.
    Do not leave it empty just because the fields exist.
    If additional information would materially help investigate the bug,
    list it.
 
-7. confidence must be a number between 0.0 and 1.0.
+8. confidence must be a number between 0.0 and 1.0.
    Do not use 1.0 unless the evidence is exceptionally clear.
    Do not use 0.0 unless there is almost no usable evidence.
 
-8. {screenshot_instruction}
+9. {screenshot_instruction}
 
 Return only the JSON object.
 """.strip()
