@@ -1525,9 +1525,9 @@
         }
 
         .test-case-meta {
-            margin-bottom: 18px;
             font-size: 13px;
             font-weight: 500;
+            flex: 1;
         }
 
         .test-case-section {
@@ -2793,16 +2793,17 @@
                     id.className = "test-case-id";
                     id.textContent = testCase.test_case_id || "Test Case";
 
+                    const meta = document.createElement("div");
+                    meta.className = "test-case-meta";
+                    meta.textContent = testCase.category || "QA Validation";
+
                     const priority = document.createElement("span");
                     priority.className = `test-case-priority ${(testCase.priority || "Medium").toLowerCase()}`;
                     priority.textContent = testCase.priority || "Medium";
 
                     header.appendChild(id);
+                    header.appendChild(meta);
                     header.appendChild(priority);
-
-                    const meta = document.createElement("div");
-                    meta.className = "test-case-meta";
-                    meta.textContent = testCase.category || "QA Validation";
 
                     const scenarioSection = document.createElement("div");
                     scenarioSection.className = "test-case-section";
@@ -2847,7 +2848,7 @@
                     purposeSection.appendChild(purposeText);
 
                     scenario.appendChild(header);
-                    scenario.appendChild(meta);
+
                     scenario.appendChild(scenarioSection);
                     scenario.appendChild(expectedSection);
                     scenario.appendChild(purposeSection);
