@@ -45,11 +45,20 @@ FIELD_ALIASES = {
 }
 
 
+REQUIRED_FIELDS = (
+    "title",
+    "description",
+    "steps_to_reproduce",
+    "expected_result",
+    "actual_result",
+)
+
+
 def _normalize_header(value: object) -> str:
     return re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower()).strip()
 
 
-def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict[str, str]]:
+def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
     if not rows:
         raise HTTPException(status_code=422, detail="The Excel file is empty.")
 
@@ -60,15 +69,7 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict[str, str]]:
         if match is not None:
             indexes[field] = match
 
-    required_fields = {
-        "title",
-        "description",
-        "steps_to_reproduce",
-        "expected_result",
-        "actual_result",
-    }
-
-    missing = [field for field in required_fields if field not in indexes]
+    missing = [field for field in REQUIRED_FIELDS if field not in indexes]
     if missing:
         labels = ", ".join(field.replace("_", " ") for field in missing)
         raise HTTPException(
@@ -86,15 +87,13 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict[str, str]]:
         if not any(values.values()):
             continue
         missing_values = [
-            field.replace("_", " ") for field, value in values.items() if not value
+            field.replace("_", " ") for field in REQUIRED_FIELDS if not values[field]
         ]
         if missing_values:
-            labels = ", ".join(missing_values)
-            raise HTTPException(
-                status_code=422,
-                detail=f"Row {row_number} is missing required values: {labels}.",
-            )
-        records.append(values)
+            error = f"Missing required values: {', '.join(missing_values)}."
+        else:
+            error = None
+        records.append({"row": row_number, "values": values, "error": error})
 
     if not records:
         raise HTTPException(
@@ -103,7 +102,7 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict[str, str]]:
     return records
 
 
-async def parse_bug_spreadsheet(file: UploadFile) -> list[dict[str, str]]:
+async def parse_bug_spreadsheet(file: UploadFile) -> list[dict]:
     filename = (file.filename or "").lower()
     content = await file.read()
     try:

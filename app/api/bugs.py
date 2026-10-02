@@ -37,46 +37,60 @@ def get_batch_progress():
 
 
 async def process_batch_record(
-    record: dict[str, str],
+    record: dict,
     semaphore: asyncio.Semaphore,
-):
-    bug = BugReportCreate(
-        title=record["title"],
-        description=record["description"],
-        steps_to_reproduce=[
-            step.strip()
-            for step in record["steps_to_reproduce"].splitlines()
-            if step.strip()
-        ],
-        expected_result=record["expected_result"],
-        actual_result=record["actual_result"],
-    )
+) -> dict:
+    values = record["values"]
+    result = {
+        "row": record["row"],
+        "status": "failed",
+        "title": values["title"],
+        "bug": values,
+        "analysis": None,
+        "error": record["error"],
+    }
+
+    if result["error"]:
+        batch_progress["failed"] += 1
+        return result
 
     try:
+        bug = BugReportCreate(
+            title=values["title"],
+            description=values["description"],
+            steps_to_reproduce=[
+                step.strip()
+                for step in values["steps_to_reproduce"].splitlines()
+                if step.strip()
+            ],
+            expected_result=values["expected_result"],
+            actual_result=values["actual_result"],
+        )
+
         async with semaphore:
             analysis = await analyze_with_llm(bug)
 
-        batch_progress["completed"] += 1
-
-    except Exception:
+    except Exception as error:
         batch_progress["failed"] += 1
-        raise
+        result["error"] = f"The LLM could not analyze this bug: {error}"
+        return result
+
+    batch_progress["completed"] += 1
 
     analysis = analysis.model_dump()
 
-    if record.get("severity"):
-        analysis["severity"] = record["severity"].strip().upper()
+    if values.get("severity"):
+        analysis["severity"] = values["severity"].strip().upper()
 
-    if record.get("priority"):
-        analysis["priority"] = record["priority"].strip().upper()
+    if values.get("priority"):
+        analysis["priority"] = values["priority"].strip().upper()
 
-    if record.get("category"):
-        analysis["category"] = record["category"].strip()
+    if values.get("category"):
+        analysis["category"] = values["category"].strip()
 
-    return {
-        "title": bug.title,
-        "analysis": analysis,
-    }
+    result["status"] = "analyzed"
+    result["analysis"] = analysis
+    return result
 
 
 @router.post("/analyze", response_model=BugAnalysis)
@@ -118,36 +132,18 @@ async def analyze_bug_batch(file: UploadFile = File(...)):
 
     semaphore = asyncio.Semaphore(worker_count)
 
-    tasks = [
-        process_batch_record(
-            record,
-            semaphore,
-        )
-        for record in records
-    ]
-
     results = await asyncio.gather(
-        *tasks,
-        return_exceptions=True,
+        *(process_batch_record(record, semaphore) for record in records)
     )
 
-    bugs = []
-    failed = 0
-
-    for result in results:
-        if isinstance(result, Exception):
-            failed += 1
-            continue
-
-        bugs.append(result)
+    failed = sum(result["status"] == "failed" for result in results)
 
     batch_progress["status"] = "completed"
 
     return {
-        "count": len(bugs),
         "total": total,
-        "completed": len(bugs),
+        "completed": total - failed,
         "failed": failed,
         "workers": worker_count,
-        "bugs": bugs,
+        "bugs": results,
     }

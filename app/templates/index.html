@@ -791,6 +791,25 @@
             color: var(--low-text);
         }
 
+        .severity-badge.status-failed {
+            border-color: var(--danger);
+            background: var(--danger);
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .batch-bug-card.is-failed {
+            border-color: var(--critical-border);
+            background:
+                linear-gradient(var(--critical-bg), var(--critical-bg)),
+                var(--card);
+        }
+
+        .batch-bug-card.is-failed .batch-bug-title {
+            color: var(--critical-text);
+            font-weight: 600;
+        }
+
         .result-item {
             padding: 15px;
             border: 1px solid var(--border);
@@ -3045,9 +3064,14 @@
                 missing_information: "Missing Information"
             };
 
+            const isFailedBug = bug =>
+                bug.status === "failed" ||
+                !bug.analysis ||
+                typeof bug.analysis !== "object";
+
             const analyses = data.bugs
-                .map(bug => bug.analysis)
-                .filter(analysis => analysis && typeof analysis === "object");
+                .filter(bug => !isFailedBug(bug))
+                .map(bug => bug.analysis);
 
             const overviewHeading = document.createElement("h3");
             overviewHeading.className = "batch-summary-heading";
@@ -3143,13 +3167,20 @@
             resultGrid.appendChild(summary);
 
             data.bugs.forEach((bug, index) => {
-                const analysis = bug.analysis;
-                if (!analysis || typeof analysis !== "object") {
-                    return;
-                }
+                const isFailed = isFailedBug(bug);
+                const excelValues = bug.bug || {};
+                const analysis = isFailed
+                    ? {
+                        priority: excelValues.priority,
+                        category: excelValues.category,
+                        missing_information:
+                            bug.error || "The bug could not be analyzed."
+                    }
+                    : bug.analysis;
 
                 const bugCard = document.createElement("details");
                 bugCard.className = "batch-bug-card";
+                bugCard.classList.toggle("is-failed", isFailed);
 
                 const heading = document.createElement("summary");
                 heading.className = "batch-bug-header";
@@ -3162,7 +3193,18 @@
 
                 const severity = analysis.severity;
 
-                if (severity !== undefined && severity !== null) {
+                if (isFailed) {
+                    const failedBadge = document.createElement("span");
+                    failedBadge.className = "severity-badge status-failed";
+                    failedBadge.textContent = "FAILED";
+
+                    const failedTooltip = bug.error || "The bug could not be analyzed.";
+
+                    failedBadge.setAttribute("data-tooltip", failedTooltip);
+                    failedBadge.setAttribute("aria-label", failedTooltip);
+
+                    heading.appendChild(failedBadge);
+                } else if (severity !== undefined && severity !== null) {
                     const severityBadge = document.createElement("span");
                     severityBadge.className = `severity-badge severity-${String(severity).toLowerCase()}`;
                     severityBadge.textContent = severity;
@@ -3231,7 +3273,9 @@
 
                     const value = document.createElement("div");
                     value.className = "result-value";
-                    value.textContent = formatAnalysisValue(key, analysis[key]);
+                    value.textContent = isFailed
+                        ? analysis[key] || "—"
+                        : formatAnalysisValue(key, analysis[key]);
 
                     item.append(label, value);
                     bugContent.appendChild(item);

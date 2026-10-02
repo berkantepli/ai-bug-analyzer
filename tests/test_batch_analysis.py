@@ -61,12 +61,23 @@ def test_batch_endpoint_reads_bug_reports_from_xlsx(monkeypatch) -> None:
 
     assert response.status_code == 200
     data = response.json()
-    assert data["count"] == 1
+    assert data["total"] == 1
+    assert data["completed"] == 1
     assert data["failed"] == 0
     assert data["bugs"] == [
         {
+            "row": 2,
+            "status": "analyzed",
             "title": "Login fails",
+            "bug": {
+                "title": "Login fails",
+                "description": "Cannot sign in",
+                "steps_to_reproduce": "1. Open login\n2. Submit",
+                "expected_result": "Dashboard opens",
+                "actual_result": "Error appears",
+            },
             "analysis": FAKE_ANALYSIS.model_dump(),
+            "error": None,
         }
     ]
 
@@ -89,21 +100,77 @@ def test_batch_endpoint_rejects_unsupported_file_types() -> None:
     assert ".xlsx and .xls" in response.json()["detail"]
 
 
-def test_batch_endpoint_rejects_rows_with_missing_values() -> None:
+HEADER = (
+    "Bug Title",
+    "Description",
+    "Steps to Reproduce",
+    "Expected Result",
+    "Actual Result",
+)
+
+
+def test_batch_endpoint_marks_rows_with_missing_values_as_failed(monkeypatch) -> None:
+    analyzed_titles = []
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        analyzed_titles.append(bug.title)
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
     content = excel_bytes(
         [
-            (
-                "Bug Title",
-                "Description",
-                "Steps to Reproduce",
-                "Expected Result",
-                "Actual Result",
-            ),
+            HEADER,
             ("Login fails", "", "1. Open login", "Dashboard opens", "Error appears"),
+            ("Logout fails", "Cannot sign out", "1. Logout", "Login page", "Error"),
         ]
     )
 
     response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
 
-    assert response.status_code == 422
-    assert "Row 2 is missing required values: description" in response.json()["detail"]
+    assert response.status_code == 200
+    data = response.json()
+    assert data["completed"] == 1
+    assert data["failed"] == 1
+    assert analyzed_titles == ["Logout fails"]
+
+    failed_bug, analyzed_bug = data["bugs"]
+    assert failed_bug["row"] == 2
+    assert failed_bug["status"] == "failed"
+    assert failed_bug["analysis"] is None
+    assert failed_bug["bug"]["title"] == "Login fails"
+    assert failed_bug["error"] == "Missing required values: description."
+    assert analyzed_bug["status"] == "analyzed"
+
+
+def test_batch_endpoint_marks_llm_errors_as_failed(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        if bug.title == "Login fails":
+            raise RuntimeError("The LLM returned invalid JSON.")
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            HEADER,
+            ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error"),
+            ("Logout fails", "Cannot sign out", "1. Logout", "Login page", "Error"),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["completed"] == 1
+    assert data["failed"] == 1
+
+    failed_bug, analyzed_bug = data["bugs"]
+    assert failed_bug["status"] == "failed"
+    assert failed_bug["analysis"] is None
+    assert failed_bug["error"] == (
+        "The LLM could not analyze this bug: The LLM returned invalid JSON."
+    )
+    assert analyzed_bug["status"] == "analyzed"
+    assert analyzed_bug["analysis"] == FAKE_ANALYSIS.model_dump()
