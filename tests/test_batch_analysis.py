@@ -216,3 +216,56 @@ def test_batch_endpoint_marks_unreadable_rows_as_failed(monkeypatch) -> None:
     unreadable_bug = data["bugs"][0]
     assert unreadable_bug["status"] == "failed"
     assert unreadable_bug["error"] == "The bug report text is unreadable."
+
+
+def test_batch_endpoint_finds_header_below_report_title(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            ("Sprint 12 Bug Report",),
+            ("Exported on 2026-10-02",),
+            (),
+            HEADER,
+            ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error"),
+            ("Logout fails", "", "1. Logout", "Login page", "Error"),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [bug["row"] for bug in data["bugs"]] == [5, 6]
+    assert [bug["status"] for bug in data["bugs"]] == ["analyzed", "failed"]
+
+
+def test_batch_endpoint_keeps_excel_row_numbers_when_sheet_starts_lower(
+    monkeypatch,
+) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    workbook = Workbook()
+    sheet = workbook.active
+    for column, value in enumerate(HEADER, start=1):
+        sheet.cell(row=3, column=column, value=value)
+    for column, value in enumerate(
+        ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error"),
+        start=1,
+    ):
+        sheet.cell(row=4, column=column, value=value)
+    output = BytesIO()
+    workbook.save(output)
+
+    response = client.post(
+        "/bugs/batch", files={"file": ("bugs.xlsx", output.getvalue())}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["bugs"][0]["row"] == 4
