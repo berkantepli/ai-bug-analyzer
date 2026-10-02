@@ -687,6 +687,56 @@
             gap: 12px;
         }
 
+        .summary-panel {
+            grid-column: 1 / -1;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--card-secondary);
+        }
+
+        .summary-row {
+            display: grid;
+            grid-template-columns: 110px minmax(0, 1fr);
+            align-items: start;
+            gap: 16px;
+            padding: 14px 15px;
+        }
+
+        .summary-row + .summary-row {
+            border-top: 1px solid var(--border);
+        }
+
+        .summary-row-label {
+            padding-top: 7px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+        }
+
+        .summary-chip[hidden] {
+            display: none;
+        }
+
+        .summary-more-toggle {
+            min-height: 30px;
+            padding: 4px 12px;
+            border: 1px dashed var(--summary-chip-border);
+            border-radius: 999px;
+            background: transparent;
+            color: var(--muted);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .summary-more-toggle:hover {
+            color: var(--text);
+            border-color: var(--muted);
+        }
+
         .batch-summary-heading {
             grid-column: 1 / -1;
             margin: 0;
@@ -982,6 +1032,15 @@
 
             .batch-summary {
                 grid-template-columns: 1fr;
+            }
+
+            .summary-row {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+
+            .summary-row-label {
+                padding-top: 0;
             }
         }
 
@@ -3153,7 +3212,7 @@
             resultGrid.appendChild(summaryHeading);
 
             const summary = document.createElement("div");
-            summary.className = "batch-summary";
+            summary.className = "summary-panel";
 
             const summaryFields = [
                 ["Severity", "severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"]],
@@ -3161,44 +3220,89 @@
                 ["Category", "category", []]
             ];
 
+            const CATEGORY_VISIBLE_LIMIT = 5;
+
+            const createSummaryChip = (key, countLabel, countValue) => {
+                const chip = document.createElement("span");
+                chip.className = "summary-chip";
+                if (key === "severity") {
+                    chip.classList.add(`severity-${countLabel.toLowerCase()}`);
+                }
+                chip.setAttribute("aria-label", `${countLabel}: ${countValue}`);
+
+                const text = document.createElement("span");
+                text.textContent = countLabel;
+                const count = document.createElement("span");
+                count.className = "summary-chip-count";
+                count.textContent = countValue;
+                chip.append(text, count);
+                return chip;
+            };
+
             summaryFields.forEach(([labelText, key, preferredOrder]) => {
                 const counts = analyses.reduce((result, analysis) => {
                     const value = analysis[key] || "Unknown";
                     result[value] = (result[value] || 0) + 1;
                     return result;
                 }, {});
-                const labels = [
+
+                // Fixed scales keep their natural order; free-text values
+                // such as categories are sorted by frequency.
+                const countLabels = [
                     ...preferredOrder.filter(value => counts[value]),
                     ...Object.keys(counts)
                         .filter(value => !preferredOrder.includes(value))
-                        .sort(),
+                        .sort((a, b) => counts[b] - counts[a] || a.localeCompare(b)),
                 ];
 
-                const item = document.createElement("div");
-                item.className = "result-item";
-                const label = document.createElement("div");
-                label.className = "result-label";
-                label.textContent = labelText;
-                const value = document.createElement("div");
-                value.className = "summary-chip-list";
-                labels.forEach(countLabel => {
-                    const chip = document.createElement("span");
-                    chip.className = "summary-chip";
-                    if (key === "severity") {
-                        chip.classList.add(`severity-${countLabel.toLowerCase()}`);
-                    }
-                    chip.setAttribute("aria-label", `${countLabel}: ${counts[countLabel]}`);
+                const row = document.createElement("div");
+                row.className = "summary-row";
 
-                    const text = document.createElement("span");
-                    text.textContent = countLabel;
-                    const count = document.createElement("span");
-                    count.className = "summary-chip-count";
-                    count.textContent = counts[countLabel];
-                    chip.append(text, count);
-                    value.appendChild(chip);
+                const label = document.createElement("div");
+                label.className = "summary-row-label";
+                label.textContent = labelText;
+
+                const chips = document.createElement("div");
+                chips.className = "summary-chip-list";
+
+                countLabels.forEach((countLabel, chipIndex) => {
+                    const chip = createSummaryChip(key, countLabel, counts[countLabel]);
+                    if (key === "category" && chipIndex >= CATEGORY_VISIBLE_LIMIT) {
+                        chip.hidden = true;
+                    }
+                    chips.appendChild(chip);
                 });
-                item.append(label, value);
-                summary.appendChild(item);
+
+                const hiddenCount = countLabels.length - CATEGORY_VISIBLE_LIMIT;
+
+                if (key === "category" && hiddenCount > 0) {
+                    const toggle = document.createElement("button");
+                    toggle.type = "button";
+                    toggle.className = "summary-more-toggle";
+                    toggle.textContent = `+${hiddenCount} more`;
+                    toggle.setAttribute("aria-expanded", "false");
+
+                    toggle.addEventListener("click", () => {
+                        const expanded = toggle.getAttribute("aria-expanded") !== "true";
+                        toggle.setAttribute("aria-expanded", String(expanded));
+                        toggle.textContent = expanded ? "Show less" : `+${hiddenCount} more`;
+
+                        [...chips.children]
+                            .slice(CATEGORY_VISIBLE_LIMIT, countLabels.length)
+                            .forEach(chip => {
+                                chip.hidden = !expanded;
+                            });
+                    });
+
+                    chips.appendChild(toggle);
+                }
+
+                if (!countLabels.length) {
+                    chips.textContent = "—";
+                }
+
+                row.append(label, chips);
+                summary.appendChild(row);
             });
 
             resultGrid.appendChild(summary);
