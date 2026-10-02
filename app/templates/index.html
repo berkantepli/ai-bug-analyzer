@@ -1708,6 +1708,14 @@
             background: rgba(14, 165, 233, 0.10);
             border-color: rgba(14, 165, 233, 0.35);
         }
+
+        .summary-overview-value {
+            margin-top: 8px;
+            font-size: 24px;
+            font-weight: 600;
+            line-height: 1;
+            color: var(--text-primary);
+        }
     </style>
 </head>
 
@@ -2436,9 +2444,11 @@
                 progressStatus.textContent = progress.status;
             }
 
+            const processed = progress.completed + progress.failed;
+
             const percentage =
                 progress.total > 0
-                    ? (progress.completed / progress.total) * 100
+                    ? (processed / progress.total) * 100
                     : 0;
 
             progressFill.style.width = `${percentage}%`;
@@ -3042,7 +3052,7 @@
                 return;
             }
 
-            resultHeading.textContent = `Batch Analysis Result (${data.bugs.length} bugs)`;
+            resultHeading.textContent = `Batch Analysis Result`;
             const labels = {
                 confidence: "Confidence",
                 priority: "Priority",
@@ -3055,6 +3065,43 @@
             const analyses = data.bugs
                 .map(bug => bug.analysis)
                 .filter(analysis => analysis && typeof analysis === "object");
+
+            const overviewHeading = document.createElement("h3");
+            overviewHeading.className = "batch-summary-heading";
+            overviewHeading.textContent = "Analysis Overview";
+            resultGrid.appendChild(overviewHeading);
+
+            const overview = document.createElement("div");
+            overview.className = "batch-summary";
+
+            const totalBugs = data.bugs.length;
+            const analyzedBugs = analyses.length;
+            const failedBugs = Math.max(totalBugs - analyzedBugs, 0);
+
+            const overviewFields = [
+                ["Bugs", totalBugs],
+                ["Analyzed", analyzedBugs],
+                ["Failed", failedBugs]
+            ];
+
+            overviewFields.forEach(([labelText, valueText]) => {
+                const item = document.createElement("div");
+                item.className = "result-item";
+
+                const label = document.createElement("div");
+                label.className = "result-label";
+                label.textContent = labelText;
+
+                const value = document.createElement("div");
+                value.className = "summary-overview-value";
+                value.textContent = valueText;
+
+                item.appendChild(label);
+                item.appendChild(value);
+                overview.appendChild(item);
+            });
+
+            resultGrid.appendChild(overview);
 
             const summaryHeading = document.createElement("h3");
             summaryHeading.className = "batch-summary-heading";
