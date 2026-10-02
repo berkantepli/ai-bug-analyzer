@@ -9,10 +9,18 @@ def valid_analysis_data() -> dict:
         "severity": "HIGH",
         "priority": "P1",
         "category": "Functional",
+        "impact": "Users cannot upload large images to their profile.",
         "possible_root_cause": "The application does not validate the uploaded file size.",
         "suggested_test_scenarios": [
-            "Upload a file larger than the allowed limit.",
-            "Upload a file exactly at the allowed limit.",
+            {
+                "test_case_id": "TC-01",
+                "category": "Input Validation",
+                "type": "Boundary",
+                "scenario": "Upload a file exactly at the allowed limit.",
+                "expected_result": "The file is uploaded successfully.",
+                "purpose": "Verify the size limit boundary.",
+                "priority": "High",
+            },
         ],
         "missing_information": [
             "Maximum allowed file size",

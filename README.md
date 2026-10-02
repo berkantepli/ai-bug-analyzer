@@ -196,18 +196,19 @@ ai-bug-analyzer/
 │   │   └── bug.py
 │   │
 │   ├── services/
-│   │   ├── bug_analyzer.py
 │   │   ├── llm_analyzer.py
 │   │   └── batch_analyzer.py
 │   │
 │   ├── static/
 │   │
-│   └── templates/
-│       └── index.html
+│   ├── templates/
+│   │   └── index.html
+│   │
+│   ├── config.py
+│   └── main.py
 │
 ├── tests/
 │
-├── main.py
 ├── requirements.txt
 └── README.md
 ```
@@ -282,14 +283,6 @@ POST /bugs/batch
 ```
 
 Accepts an Excel file and analyzes the contained bug reports.
-
-### Create Bug
-
-```http
-POST /bugs/
-```
-
-Creates a bug report payload.
 
 ---
 

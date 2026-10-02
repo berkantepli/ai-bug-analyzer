@@ -4,9 +4,22 @@ from openpyxl import Workbook
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.schemas.analysis import BugAnalysis
 
 
 client = TestClient(app)
+
+
+FAKE_ANALYSIS = BugAnalysis(
+    severity="HIGH",
+    priority="P2",
+    category="Authentication",
+    impact="Users cannot sign in.",
+    possible_root_cause="The login request is rejected.",
+    suggested_test_scenarios=[],
+    missing_information=[],
+    confidence=0.8,
+)
 
 
 def excel_bytes(rows: list[tuple[object, ...]]) -> bytes:
@@ -19,7 +32,12 @@ def excel_bytes(rows: list[tuple[object, ...]]) -> bytes:
     return output.getvalue()
 
 
-def test_batch_endpoint_reads_bug_reports_from_xlsx() -> None:
+def test_batch_endpoint_reads_bug_reports_from_xlsx(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
     content = excel_bytes(
         [
             (
@@ -42,32 +60,15 @@ def test_batch_endpoint_reads_bug_reports_from_xlsx() -> None:
     response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
 
     assert response.status_code == 200
-    assert response.json() == {
-        "count": 1,
-        "bugs": [
-            {
-                "title": "Login fails",
-                "analysis": {
-                    "severity": "HIGH",
-                    "priority": "P2",
-                    "category": "Functional",
-                    "possible_root_cause": (
-                        "The authentication flow may contain an incorrect validation "
-                        "or authentication handling issue."
-                    ),
-                    "suggested_test_scenarios": [
-                        "Reproduce the issue using the provided steps.",
-                        "Verify the expected result with valid input.",
-                        "Verify the behavior with invalid or boundary input.",
-                        "Retest the affected functionality after the fix.",
-                        "Perform regression testing on related functionality.",
-                    ],
-                    "missing_information": [],
-                    "confidence": 0.9,
-                },
-            }
-        ],
-    }
+    data = response.json()
+    assert data["count"] == 1
+    assert data["failed"] == 0
+    assert data["bugs"] == [
+        {
+            "title": "Login fails",
+            "analysis": FAKE_ANALYSIS.model_dump(),
+        }
+    ]
 
 
 def test_batch_endpoint_reports_missing_columns() -> None:

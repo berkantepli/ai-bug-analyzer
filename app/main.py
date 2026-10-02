@@ -24,9 +24,3 @@ app.include_router(health_router)
 def home() -> str:
     html_path = Path(__file__).parent / "templates" / "index.html"
     return html_path.read_text(encoding="utf-8")
-
-
-@app.get("/health")
-def health_check() -> dict[str, str]:
-    """Return the application health status."""
-    return {"status": "ok"}

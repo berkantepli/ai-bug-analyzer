@@ -4,6 +4,8 @@ import json
 
 from fastapi import APIRouter
 
+from app.config import OLLAMA_MODEL, OLLAMA_URL
+
 
 router = APIRouter(
     prefix="/health",
@@ -11,13 +13,7 @@ router = APIRouter(
 )
 
 
-# Ollama configuration
-OLLAMA_URL = "http://127.0.0.1:11434"
 OLLAMA_TAGS_URL = f"{OLLAMA_URL}/api/tags"
-
-# Required production model.
-# This is intentionally kept separate from any temporary test model.
-OLLAMA_MODEL = "qwen3-vl:8b-instruct"
 
 
 def check_ollama() -> dict:

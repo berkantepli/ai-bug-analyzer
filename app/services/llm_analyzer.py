@@ -6,12 +6,12 @@ from typing import Optional
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
+from app.config import OLLAMA_MODEL, OLLAMA_URL
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
 
 
-OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
-OLLAMA_MODEL = "qwen3-vl:8b-instruct"
+OLLAMA_CHAT_URL = f"{OLLAMA_URL}/api/chat"
 
 
 def build_prompt(bug: BugReportCreate, has_screenshot: bool) -> str:
@@ -180,7 +180,7 @@ Return only the JSON object.
 
 def _call_ollama(payload: dict) -> dict:
     request = Request(
-        OLLAMA_URL,
+        OLLAMA_CHAT_URL,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
@@ -202,7 +202,7 @@ def _call_ollama(payload: dict) -> dict:
     except URLError as error:
         raise RuntimeError(
             "Could not connect to Ollama. "
-            "Make sure Ollama is running on http://127.0.0.1:11434."
+            f"Make sure Ollama is running on {OLLAMA_URL}."
         ) from error
 
     try:

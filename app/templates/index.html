@@ -421,12 +421,6 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .service-left {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-        }
-
         .status-dot {
             display: inline-block;
             width: 8px;
@@ -445,14 +439,6 @@
 
         .status-dot.unavailable {
             background: #ef4444;
-        }
-
-        .service-text {
-            color: var(--text);
-        }
-
-        .service-value {
-            color: var(--muted);
         }
 
         /* Form card */
@@ -2201,9 +2187,6 @@
                 data.model?.status ||
                 data.model_status ||
                 "not_checked";
-
-            const modelAvailable =
-                modelStatus === "available";
 
             const modelClass =
                 modelStatus === "available"

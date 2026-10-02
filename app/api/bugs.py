@@ -65,34 +65,10 @@ async def process_batch_record(
     analysis = analysis.model_dump()
 
     if record.get("severity"):
-        severity = record["severity"].strip().upper()
-
-        severity_map = {
-            "CRITICAL": "CRITICAL",
-            "HIGH": "HIGH",
-            "MEDIUM": "MEDIUM",
-            "LOW": "LOW",
-        }
-
-        analysis["severity"] = severity_map.get(
-            severity,
-            severity,
-        )
+        analysis["severity"] = record["severity"].strip().upper()
 
     if record.get("priority"):
-        priority = record["priority"].strip().upper()
-
-        priority_map = {
-            "P1": "P1",
-            "P2": "P2",
-            "P3": "P3",
-            "P4": "P4",
-        }
-
-        analysis["priority"] = priority_map.get(
-            priority,
-            priority,
-        )
+        analysis["priority"] = record["priority"].strip().upper()
 
     if record.get("category"):
         analysis["category"] = record["category"].strip()
@@ -100,14 +76,6 @@ async def process_batch_record(
     return {
         "title": bug.title,
         "analysis": analysis,
-    }
-
-
-@router.post("/")
-def create_bug(bug: BugReportCreate):
-    return {
-        "message": "Bug report created successfully",
-        "bug": bug,
     }
 
 
