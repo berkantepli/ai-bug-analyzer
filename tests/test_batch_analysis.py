@@ -174,3 +174,45 @@ def test_batch_endpoint_marks_llm_errors_as_failed(monkeypatch) -> None:
     )
     assert analyzed_bug["status"] == "analyzed"
     assert analyzed_bug["analysis"] == FAKE_ANALYSIS.model_dump()
+
+
+def test_batch_endpoint_marks_unreadable_rows_as_failed(monkeypatch) -> None:
+    analyzed_titles = []
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        analyzed_titles.append(bug.title)
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            HEADER,
+            (
+                "Xq7#vL@ zR9$ kT~pW 4&mN",
+                "Fj%8 qwZ!x 9Lp#r Tz@4k Vb^7n",
+                "1. Wq#8z Kp@3 lX!",
+                "Lx~6p Qr#4 zM@ Vn$1",
+                "Dz*2q Pj+9 xK? Ym=5",
+            ),
+            (
+                "TypeError on profile page",
+                "TypeError: Cannot read property 'x' of undefined at app.js:42",
+                "1. Open /profile",
+                "Profile page loads",
+                "API returns 500 on GET /api/v1/users?id=12",
+            ),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["completed"] == 1
+    assert data["failed"] == 1
+    assert analyzed_titles == ["TypeError on profile page"]
+
+    unreadable_bug = data["bugs"][0]
+    assert unreadable_bug["status"] == "failed"
+    assert unreadable_bug["error"] == "The bug report text is unreadable."
