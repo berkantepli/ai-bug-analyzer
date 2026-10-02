@@ -3,6 +3,7 @@ from io import BytesIO
 from openpyxl import Workbook
 from fastapi.testclient import TestClient
 
+from app.api import bugs
 from app.main import app
 from app.schemas.analysis import BugAnalysis
 
@@ -269,3 +270,31 @@ def test_batch_endpoint_keeps_excel_row_numbers_when_sheet_starts_lower(
 
     assert response.status_code == 200
     assert response.json()["bugs"][0]["row"] == 4
+
+
+def test_batch_progress_reports_rejected_rows_up_front(monkeypatch) -> None:
+    progress_during_analysis = []
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        progress_during_analysis.append(dict(bugs.batch_progress))
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            HEADER,
+            ("Login fails", "", "1. Login", "Dashboard", "Error"),
+            ("Logout fails", "Cannot sign out", "1. Logout", "Login page", "Error"),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.status_code == 200
+    assert progress_during_analysis[0]["failed"] == 1
+    assert progress_during_analysis[0]["rejected"] == 1
+    assert progress_during_analysis[0]["completed"] == 0
+    assert bugs.batch_progress["completed"] == 1
+    assert bugs.batch_progress["failed"] == 1
+    assert bugs.batch_progress["status"] == "completed"

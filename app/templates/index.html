@@ -2412,10 +2412,11 @@
             }
         }
 
-        async function updateBatchProgress() {
-            const response = await fetch("/bugs/batch/progress");
-            const progress = await response.json();
+        let batchProgressInterval = null;
 
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        function renderBatchProgress({ processed, total, done }) {
             const progressBox = document.getElementById("batchProgress");
             const progressCount = document.getElementById("batchProgressCount");
             const progressStatus = document.getElementById("batchProgressStatus");
@@ -2427,58 +2428,89 @@
 
             progressBox.hidden = false;
 
-            progressCount.textContent =
-                `${progress.completed} / ${progress.total} bugs analyzed`;
+            progressCount.textContent = `${processed} / ${total} bugs processed`;
 
-            if (
-                progress.status === "completed" ||
-                progress.completed + progress.failed >= progress.total
-            ) {
+            if (done) {
                 progressStatus.textContent = "Completed";
                 progressStatus.classList.add("completed");
                 stopBatchTimer();
                 stopAnalyzingDots();
-
-            } else if (progress.status === "processing") {
+            } else {
                 progressStatus.classList.remove("completed");
                 startAnalyzingDots();
-            } else {
-                progressStatus.textContent = progress.status;
             }
 
-            const processed = progress.completed + progress.failed;
-
-            const percentage =
-                progress.total > 0
-                    ? (processed / progress.total) * 100
-                    : 0;
+            const percentage = total > 0 ? (processed / total) * 100 : 0;
 
             progressFill.style.width = `${percentage}%`;
 
             progressPercentage.textContent =
                 `${Math.round(percentage)}%`;
-
-            return progress;
         }
 
-        async function startBatchProgressPolling() {
-            const interval = setInterval(async () => {
-                try {
-                    const progress = await updateBatchProgress();
+        async function fetchBatchProgress() {
+            const response = await fetch("/bugs/batch/progress");
+            return response.json();
+        }
 
-                    if (
-                        progress.status === "completed" ||
-                        progress.completed + progress.failed >= progress.total
-                    ) {
-                        clearInterval(interval);
-                        stopBatchTimer();
+        // Rows rejected while reading the Excel file finish instantly, so they
+        // are left out of the live progress and animated in at the end.
+        function liveProcessedCount(progress) {
+            return progress.completed + progress.failed - (progress.rejected || 0);
+        }
+
+        function stopBatchProgressPolling() {
+            if (batchProgressInterval) {
+                clearInterval(batchProgressInterval);
+                batchProgressInterval = null;
+            }
+        }
+
+        function startBatchProgressPolling() {
+            stopBatchProgressPolling();
+
+            batchProgressInterval = setInterval(async () => {
+                try {
+                    const progress = await fetchBatchProgress();
+
+                    if (progress.status !== "processing") {
+                        stopBatchProgressPolling();
+                        return;
                     }
+
+                    renderBatchProgress({
+                        processed: liveProcessedCount(progress),
+                        total: progress.total,
+                        done: false
+                    });
                 } catch (error) {
                     console.error("Progress update failed:", error);
-                    clearInterval(interval);
-                    stopBatchTimer();
+                    stopBatchProgressPolling();
                 }
             }, 1000);
+        }
+
+        async function finishBatchProgress(data) {
+            stopBatchProgressPolling();
+
+            const total = data.total;
+            let processed = total;
+
+            try {
+                processed = liveProcessedCount(await fetchBatchProgress());
+            } catch (error) {
+                console.error("Progress update failed:", error);
+            }
+
+            const remaining = total - processed;
+            const stepDelay = Math.min(1750, 15000 / Math.max(remaining, 1));
+
+            for (; processed < total; processed += 1) {
+                renderBatchProgress({ processed, total, done: false });
+                await sleep(stepDelay);
+            }
+
+            renderBatchProgress({ processed: total, total, done: true });
         }
 
         batchAnalyzeButton.addEventListener("click", async () => {
@@ -2505,8 +2537,13 @@
                     data = await response.text();
                 }
                 if (!response.ok) throw data;
+                await finishBatchProgress(data);
                 renderBatchResults(data);
+                document.getElementById("batchProgress").hidden = false;
             } catch (error) {
+                stopBatchProgressPolling();
+                stopBatchTimer();
+                stopAnalyzingDots();
                 clearResults();
                 errorMessage.textContent = formatError(error);
                 errorCard.classList.add("visible");

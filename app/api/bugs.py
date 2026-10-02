@@ -28,6 +28,7 @@ batch_progress = {
     "total": 0,
     "completed": 0,
     "failed": 0,
+    "rejected": 0,
 }
 
 
@@ -50,8 +51,8 @@ async def process_batch_record(
         "error": record["error"],
     }
 
+    # Rows rejected while reading the Excel file are counted up front.
     if result["error"]:
-        batch_progress["failed"] += 1
         return result
 
     try:
@@ -122,10 +123,13 @@ async def analyze_bug(
 async def analyze_bug_batch(file: UploadFile = File(...)):
     records = await parse_bug_spreadsheet(file)
 
+    rejected = sum(1 for record in records if record["error"])
+
     batch_progress["status"] = "processing"
     batch_progress["total"] = len(records)
     batch_progress["completed"] = 0
-    batch_progress["failed"] = 0
+    batch_progress["failed"] = rejected
+    batch_progress["rejected"] = rejected
 
     total = len(records)
     worker_count = calculate_worker_count(total)
