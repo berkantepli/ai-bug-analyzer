@@ -3446,13 +3446,27 @@
 
             resultGrid.appendChild(summary);
 
+            // A duplicate has no analysis of its own, so it points at the
+            // original and says when the original has no analysis either.
+            const describeDuplicate = bug => {
+                const original = data.bugs[bug.duplicate_of - 1];
+                const base = `This bug is a duplicate of Bug ${bug.duplicate_of}`;
+
+                if (original && isNotAnalyzedBug(original)) {
+                    return `${base}, which was not analyzed because Ollama became unavailable.`;
+                }
+                if (original && isFailedBug(original)) {
+                    return `${base}, which could not be analyzed.`;
+                }
+                return `${base}.`;
+            };
+
             data.bugs.forEach((bug, index) => {
                 const isFailed = isFailedBug(bug);
                 const isDuplicate = isDuplicateBug(bug);
                 const isNotAnalyzed = isNotAnalyzedBug(bug);
                 const hasNoAnalysis = isFailed || isDuplicate || isNotAnalyzed;
-                const duplicateMessage =
-                    `This bug is a duplicate of Bug ${bug.duplicate_of}.`;
+                const duplicateMessage = isDuplicate ? describeDuplicate(bug) : "";
                 const excelValues = bug.bug || {};
                 const analysis = isFailed || isNotAnalyzed
                     ? {
