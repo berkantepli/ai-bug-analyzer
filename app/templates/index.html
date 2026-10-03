@@ -2160,6 +2160,17 @@
             }
         }
 
+        // Diagnosis messages are built as HTML, but their reasons can contain
+        // text from Ollama or the model, so they must never be rendered as HTML.
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
         function getAnalysisDiagnosis(data) {
             if (!data) {
                 return `
@@ -2217,9 +2228,9 @@
             </div>
 
             <div class="diagnosis-item-message">
-                ${data.application?.reason ||
+                ${escapeHtml(data.application?.reason ||
                 "FastAPI application is running."
-                }
+                )}
             </div>
         </div>
     `);
@@ -2264,7 +2275,7 @@
             ${data.ollama?.reason
                     ? `
                     <div class="diagnosis-item-message">
-                        ${data.ollama.reason}
+                        ${escapeHtml(data.ollama.reason)}
                     </div>
                 `
                     : ""
@@ -2322,7 +2333,7 @@
             ${data.model?.reason
                     ? `
                     <div class="diagnosis-item-message">
-                        ${data.model.reason}
+                        ${escapeHtml(data.model.reason)}
                     </div>
                 `
                     : ""
@@ -2374,7 +2385,7 @@
             ${data.inference?.reason
                     ? `
                     <div class="diagnosis-item-message">
-                        ${data.inference.reason}
+                        ${escapeHtml(data.inference.reason)}
                     </div>
                 `
                     : ""
