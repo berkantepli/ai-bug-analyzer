@@ -2501,6 +2501,17 @@
 
         let batchProgressInterval = null;
 
+        // Results only live in this page, so leaving it while an analysis
+        // runs loses them; the browser asks the user to confirm first.
+        let runningAnalyses = 0;
+
+        window.addEventListener("beforeunload", event => {
+            if (runningAnalyses > 0) {
+                event.preventDefault();
+                event.returnValue = "";
+            }
+        });
+
         const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
         function renderBatchProgress({ processed, total, done }) {
@@ -2623,6 +2634,7 @@
             startBatchProgressPolling(batchId);
 
             batchAnalyzeButton.disabled = true;
+            runningAnalyses += 1;
             batchAnalyzeButton.innerHTML = `
                 <span class="loading"><span class="spinner"></span>Analyzing Bugs</span>
             `;
@@ -2651,6 +2663,7 @@
                 errorCard.classList.add("visible");
                 resultContext = { mode: "batch", type: "error" };
             } finally {
+                runningAnalyses -= 1;
                 batchAnalyzeButton.disabled = !batchFileInput.files[0];
                 batchAnalyzeButton.textContent = "Analyze Bugs";
             }
@@ -3698,6 +3711,7 @@
             });
 
             analyzeButton.disabled = true;
+            runningAnalyses += 1;
 
             analyzeButton.innerHTML = `
             <span class="loading">
@@ -3735,6 +3749,7 @@
                 resultContext = { mode: "single", type: "error" };
 
             } finally {
+                runningAnalyses -= 1;
                 analyzeButton.disabled = false;
                 analyzeButton.textContent = "Analyze Bug";
             }
