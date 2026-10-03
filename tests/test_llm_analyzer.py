@@ -103,6 +103,7 @@ def test_screenshot_is_only_sent_with_the_analysis(monkeypatch) -> None:
         llm_message(
             {
                 **ANALYSIS_FIELDS,
+                "screenshot_matches_report": True,
                 "confidence": 0.9,
                 "visual_evidence": "The screenshot shows the disabled button.",
             }
@@ -118,3 +119,24 @@ def test_screenshot_is_only_sent_with_the_analysis(monkeypatch) -> None:
     assert analysis_call["messages"][0]["images"] != []
     assert analysis.visual_evidence == "The screenshot shows the disabled button."
     assert analysis.confidence == 0.9
+
+
+def test_mismatched_screenshot_caps_confidence(monkeypatch) -> None:
+    fake_ollama(
+        monkeypatch,
+        validity(),
+        llm_message(
+            {
+                **ANALYSIS_FIELDS,
+                "screenshot_matches_report": False,
+                "confidence": 0.95,
+                "visual_evidence": "The screenshot shows a login page.",
+            }
+        ),
+    )
+
+    analysis = asyncio.run(
+        llm_analyzer.analyze_with_llm(BUG, [FakeUpload(b"image-bytes")])
+    )
+
+    assert analysis.confidence == 0.6

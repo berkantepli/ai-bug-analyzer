@@ -22,6 +22,20 @@ class ReportValidity(BaseModel):
     invalid_reason: str
 
 
+class ScreenshotMatch(BaseModel):
+    screenshot_matches_report: bool
+
+
+# Comes first so the model compares the screenshot with the report before
+# writing the analysis.
+class ScreenshotBugAnalysis(BugAnalysis, ScreenshotMatch):
+    pass
+
+
+# Confidence ceiling when the screenshot does not support the report.
+MISMATCHED_SCREENSHOT_MAX_CONFIDENCE = 0.6
+
+
 class InvalidBugReportError(Exception):
     """The LLM judged the input not to be a meaningful bug report."""
 
@@ -99,6 +113,15 @@ For visual_evidence:
 - If the screenshot clearly provides relevant evidence, visual_evidence
   MUST contain a non-empty string.
 - Only use null when the screenshot genuinely contains no useful evidence.
+- If the screenshot does not match the written report (for example it shows
+  a different page or feature), still analyze the written report normally
+  and explain the mismatch in visual_evidence: describe what the screenshot
+  actually shows and how it differs from the reported problem.
+- Set screenshot_matches_report to true only when the screenshot shows the
+  page, feature or state described in the written report; otherwise false.
+- A mismatched screenshot weakens the evidence for the report, so
+  confidence must then be at most 0.6. Only a screenshot that supports the
+  written report may raise confidence.
 
 Visual evidence requirement:
 
@@ -116,6 +139,8 @@ The visual_evidence field must be null.
 """
     )
 
+    screenshot_field = "\n- screenshot_matches_report" if has_screenshot else ""
+
     return f"""
 You are an experienced Software QA Engineer analyzing a bug report.
 
@@ -131,7 +156,7 @@ Do not return:
 {_report_text(bug)}
 
 Your analysis must contain exactly these fields:
-
+{screenshot_field}
 - severity
 - priority
 - category
@@ -349,4 +374,17 @@ async def analyze_with_llm(
 
     prompt = build_prompt(bug, has_screenshot=bool(images))
 
-    return _validate(BugAnalysis, await _request_json(prompt, images, BugAnalysis))
+    if not images:
+        return _validate(BugAnalysis, await _request_json(prompt, [], BugAnalysis))
+
+    result = _validate(
+        ScreenshotBugAnalysis,
+        await _request_json(prompt, images, ScreenshotBugAnalysis),
+    )
+
+    analysis = result.model_dump(exclude={"screenshot_matches_report"})
+    if not result.screenshot_matches_report:
+        analysis["confidence"] = min(
+            analysis["confidence"], MISMATCHED_SCREENSHOT_MAX_CONFIDENCE
+        )
+    return BugAnalysis.model_validate(analysis)
