@@ -1,4 +1,6 @@
+import asyncio
 from io import BytesIO
+from urllib.error import HTTPError
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,7 +9,8 @@ from openpyxl import Workbook
 from app.api import bugs
 from app.main import app
 from app.schemas.analysis import BugAnalysis
-from app.services import batch_analyzer
+from app.schemas.bug import BugReportCreate
+from app.services import batch_analyzer, llm_analyzer
 
 
 client = TestClient(app)
@@ -198,3 +201,34 @@ def test_too_many_bug_records_are_rejected(monkeypatch) -> None:
 
     assert response.status_code == 422
     assert "the maximum is 1" in response.json()["detail"]
+
+
+# ---------------- error details stay on the server ----------------
+
+
+def test_ollama_error_body_is_not_returned_to_the_user(monkeypatch) -> None:
+    def failing_urlopen(request, timeout):
+        raise HTTPError(
+            request.full_url, 500, "error", {}, BytesIO(b"internal stack trace")
+        )
+
+    monkeypatch.setattr(llm_analyzer, "urlopen", failing_urlopen)
+
+    with pytest.raises(RuntimeError) as error:
+        llm_analyzer._call_ollama({})
+
+    assert str(error.value) == "Ollama returned HTTP 500."
+
+
+def test_validation_details_are_not_returned_to_the_user(monkeypatch) -> None:
+    monkeypatch.setattr(
+        llm_analyzer,
+        "_call_ollama",
+        lambda payload: {"message": {"content": '{"severity": "HIGH"}'}},
+    )
+    bug = BugReportCreate(**{**VALID_BUG, "steps_to_reproduce": ["Open"]})
+
+    with pytest.raises(RuntimeError) as error:
+        asyncio.run(llm_analyzer.analyze_with_llm(bug))
+
+    assert str(error.value) == "The LLM returned an incomplete analysis."

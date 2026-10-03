@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import logging
 from typing import Optional
 
 from urllib.request import Request, urlopen
@@ -14,6 +15,10 @@ from app.schemas.bug import BugReportCreate
 
 
 OLLAMA_CHAT_URL = f"{OLLAMA_URL}/api/chat"
+
+# Raw Ollama errors and validation dumps go to the server log only; users
+# see a short message.
+logger = logging.getLogger(__name__)
 
 
 class ReportValidity(BaseModel):
@@ -294,10 +299,9 @@ def _call_ollama(payload: dict) -> dict:
 
     except HTTPError as error:
         error_body = error.read().decode("utf-8", errors="replace")
+        logger.warning("Ollama returned HTTP %s: %s", error.code, error_body)
 
-        raise RuntimeError(
-            f"Ollama returned HTTP {error.code}: {error_body}"
-        ) from error
+        raise RuntimeError(f"Ollama returned HTTP {error.code}.") from error
 
     except URLError as error:
         raise RuntimeError(
@@ -339,7 +343,8 @@ async def _request_json(prompt: str, images: list[str], schema: type) -> dict:
         raise
 
     except Exception as error:
-        raise RuntimeError(f"Unexpected error while calling Ollama: {error}") from error
+        logger.exception("Unexpected error while calling Ollama")
+        raise RuntimeError("Unexpected error while calling Ollama.") from error
 
     try:
         content = response["message"]["content"]
@@ -361,9 +366,8 @@ def _validate(schema: type, data: dict):
         return schema.model_validate(data)
 
     except Exception as error:
-        raise RuntimeError(
-            f"LLM response failed {schema.__name__} validation: {error}"
-        ) from error
+        logger.warning("LLM response failed %s validation: %s", schema.__name__, error)
+        raise RuntimeError("The LLM returned an incomplete analysis.") from error
 
 
 def _raise_if_invalid(validity: ReportValidity) -> None:

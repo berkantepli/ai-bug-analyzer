@@ -1,10 +1,14 @@
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 import json
+import logging
 
 from fastapi import APIRouter
 
 from app.config import OLLAMA_MODEL, OLLAMA_URL
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -168,16 +172,18 @@ def check_inference(ollama_result: dict, model_result: dict) -> dict:
         }
 
     except (URLError, TimeoutError, OSError) as error:
+        logger.warning("Inference health check failed: %s", error)
         return {
             "status": "unavailable",
-            "reason": f"The model inference request failed: {error}",
+            "reason": "The model inference request failed.",
             "suggested_action": ("Check Ollama and the model configuration."),
         }
 
     except (json.JSONDecodeError, ValueError) as error:
+        logger.warning("Invalid inference health check response: %s", error)
         return {
             "status": "unavailable",
-            "reason": (f"Ollama returned an invalid inference response: {error}"),
+            "reason": "Ollama returned an invalid inference response.",
             "suggested_action": ("Restart Ollama and try the diagnosis again."),
         }
 
