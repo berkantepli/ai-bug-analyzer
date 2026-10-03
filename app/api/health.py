@@ -118,9 +118,9 @@ def check_inference(ollama_result: dict, model_result: dict) -> dict:
         return {
             "status": "not_checked",
             "reason": (
-                "The required model is unavailable, so inference could not be tested."
+                "Inference test was skipped because the required model is unavailable."
             ),
-            "suggested_action": "Make sure the required model is installed.",
+            "suggested_action": "Make sure the required model is available first.",
         }
 
     # A test request would wait behind the running analyses and time out,
@@ -226,24 +226,28 @@ def health_check() -> dict:
     }
 
 
+def run_checks() -> tuple[dict, dict, dict]:
+    """Check Ollama, the required model and inference, in that order."""
+    ollama = check_ollama()
+    model = check_model(ollama)
+    inference = check_inference(ollama, model)
+    return ollama, model, inference
+
+
+def is_available(*results: dict) -> bool:
+    return all(result["status"] == "available" for result in results)
+
+
 @router.get("/analysis")
 def analysis_health() -> dict:
     """
     Quick health check for the complete analysis service.
     """
 
-    ollama = check_ollama()
-    model = check_model(ollama)
-    inference = check_inference(ollama, model)
-
-    ollama_available = ollama["status"] == "available"
-    model_available = model["status"] == "available"
-    inference_available = inference["status"] == "available"
-
-    available = ollama_available and model_available and inference_available
+    ollama, model, inference = run_checks()
 
     return {
-        "available": available,
+        "available": is_available(ollama, model, inference),
         "provider": "ollama",
         "model": OLLAMA_MODEL,
         "ollama": {
@@ -273,34 +277,10 @@ def diagnose_analysis_service() -> dict:
     Analysis Service
     """
 
-    ollama = check_ollama()
-    model = check_model(ollama)
-
-    ollama_available = ollama["status"] == "available"
-    model_available = model["status"] == "available"
-
-    # Only run inference if the required model is available.
-    if model_available:
-        inference = check_inference(
-            ollama,
-            model,
-        )
-    else:
-        inference = {
-            "status": "not_checked",
-            "reason": (
-                "Inference test was skipped because the required model is unavailable."
-            ),
-            "suggested_action": ("Make sure the required model is available first."),
-        }
-
-    inference_available = inference["status"] == "available"
-
-    # Analysis service is available only when every dependency passes.
-    analysis_available = ollama_available and model_available and inference_available
+    ollama, model, inference = run_checks()
 
     return {
-        "available": analysis_available,
+        "available": is_available(ollama, model, inference),
         "application": {
             "status": "available",
             "reason": "FastAPI application is running.",
