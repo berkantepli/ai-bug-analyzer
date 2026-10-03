@@ -1,4 +1,5 @@
 import asyncio
+import time
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -355,6 +356,35 @@ def test_batch_stops_sending_bugs_once_ollama_is_unavailable(monkeypatch) -> Non
     # Ollama error itself is reported once in stopped_reason.
     assert [bug["status"] for bug in data["bugs"]] == ["not_analyzed"] * 3
     assert [bug["error"] for bug in data["bugs"]] == [bugs.NOT_ANALYZED_ERROR] * 3
+
+
+def test_running_analyses_are_released_when_ollama_fails(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        if bug.title == "Login fails":
+            await asyncio.sleep(0.05)
+            raise OllamaUnavailableError("Ollama did not respond.")
+        # Simulates a request stuck on a hung Ollama.
+        await asyncio.sleep(30)
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+    monkeypatch.setattr(bugs, "calculate_worker_count", lambda total: 3)
+
+    content = excel_bytes(
+        [
+            HEADER,
+            ("Logout fails", "Cannot sign out", "1. Logout", "Login page", "Error"),
+            ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error"),
+            ("Search fails", "No results", "1. Search", "Results", "Empty list"),
+        ]
+    )
+
+    started = time.monotonic()
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 5
+    assert [bug["status"] for bug in response.json()["bugs"]] == ["not_analyzed"] * 3
 
 
 def test_batch_without_ollama_errors_has_no_stopped_reason(monkeypatch) -> None:

@@ -109,6 +109,28 @@ def get_batch_progress(batch_id: str):
     return progress
 
 
+async def _analyze_unless_stopped(
+    bug: BugReportCreate, stopped: asyncio.Event
+) -> Optional[BugAnalysis]:
+    """Analyze the bug, or return None as soon as the batch is stopped.
+
+    Without this, analyses already waiting on a hung Ollama would each wait
+    for the full timeout after the first one has failed.
+    """
+    analysis = asyncio.ensure_future(analyze_with_llm(bug))
+    stop = asyncio.ensure_future(stopped.wait())
+    try:
+        await asyncio.wait({analysis, stop}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        stop.cancel()
+
+    if analysis.done():
+        return analysis.result()
+
+    analysis.cancel()
+    return None
+
+
 async def process_batch_record(
     record: dict,
     semaphore: asyncio.Semaphore,
@@ -141,6 +163,8 @@ async def process_batch_record(
         result["error"] = NOT_ANALYZED_ERROR
         return result
 
+    stopped = batch_state["stopped"]
+
     try:
         bug = BugReportCreate(
             title=values["title"],
@@ -157,13 +181,17 @@ async def process_batch_record(
         async with semaphore:
             # Once Ollama is unreachable, the remaining bugs are not sent:
             # each one would fail the same way or wait for the full timeout.
-            if batch_state["ollama_error"]:
+            if stopped.is_set():
                 return not_analyzed()
 
-            analysis = await analyze_with_llm(bug)
+            analysis = await _analyze_unless_stopped(bug, stopped)
+            if analysis is None:
+                return not_analyzed()
 
     except OllamaUnavailableError as error:
-        batch_state["ollama_error"] = batch_state["ollama_error"] or str(error)
+        if not stopped.is_set():
+            batch_state["ollama_error"] = str(error)
+            stopped.set()
         return not_analyzed()
 
     except InvalidBugReportError as error:
@@ -287,7 +315,7 @@ async def analyze_bug_batch(
         worker_count = calculate_worker_count(total)
 
         semaphore = asyncio.Semaphore(worker_count)
-        batch_state = {"ollama_error": None}
+        batch_state = {"ollama_error": None, "stopped": asyncio.Event()}
 
         results = await asyncio.gather(
             *(
