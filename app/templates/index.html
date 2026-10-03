@@ -2102,6 +2102,20 @@
         const batchAnalyzeButton = document.getElementById("batchAnalyzeButton");
         let resultContext = null;
 
+        // Both analyze buttons follow the service status and whether an
+        // analysis of that kind is already running.
+        let serviceStatus = "checking";
+        let singleAnalysisRunning = false;
+        let batchAnalysisRunning = false;
+
+        function refreshAnalyzeButtons() {
+            const serviceUsable = serviceStatus !== "unavailable";
+
+            analyzeButton.disabled = !serviceUsable || singleAnalysisRunning;
+            batchAnalyzeButton.disabled =
+                !serviceUsable || batchAnalysisRunning || !batchFileInput.files[0];
+        }
+
         async function getAnalysisDiagnosisData() {
             try {
                 const response = await fetch("/health/analysis/diagnose", {
@@ -2418,14 +2432,8 @@
         batchFileInput.addEventListener("change", () => {
             const file = batchFileInput.files[0];
 
-            if (!file) {
-                batchFileName.textContent = "No file chosen";
-                batchAnalyzeButton.disabled = true;
-                return;
-            }
-
-            batchFileName.textContent = file.name;
-            batchAnalyzeButton.disabled = false;
+            batchFileName.textContent = file ? file.name : "No file chosen";
+            refreshAnalyzeButtons();
         });
 
         batchClearButton.addEventListener("click", () => {
@@ -2433,7 +2441,7 @@
 
             batchFileInput.value = "";
             batchFileName.textContent = "No file chosen";
-            batchAnalyzeButton.disabled = true;
+            refreshAnalyzeButtons();
             clearResults();
         });
 
@@ -2633,7 +2641,8 @@
             startBatchTimer();
             startBatchProgressPolling(batchId);
 
-            batchAnalyzeButton.disabled = true;
+            batchAnalysisRunning = true;
+            refreshAnalyzeButtons();
             runningAnalyses += 1;
             batchAnalyzeButton.innerHTML = `
                 <span class="loading"><span class="spinner"></span>Analyzing Bugs</span>
@@ -2654,6 +2663,12 @@
                 await finishBatchProgress(data);
                 renderBatchResults(data);
                 document.getElementById("batchProgress").hidden = false;
+
+                // Bugs that failed because of Ollama may mean the service went
+                // down; refresh the status shown at the top.
+                if (data.bugs.some(bug => (bug.error || "").startsWith(LLM_ERROR_PREFIX))) {
+                    checkServiceStatus();
+                }
             } catch (error) {
                 stopBatchProgressPolling();
                 stopBatchTimer();
@@ -2664,7 +2679,8 @@
                 resultContext = { mode: "batch", type: "error" };
             } finally {
                 runningAnalyses -= 1;
-                batchAnalyzeButton.disabled = !batchFileInput.files[0];
+                batchAnalysisRunning = false;
+                refreshAnalyzeButtons();
                 batchAnalyzeButton.textContent = "Analyze Bugs";
             }
         });
@@ -3710,7 +3726,8 @@
                 formData.append("screenshots", file);
             });
 
-            analyzeButton.disabled = true;
+            singleAnalysisRunning = true;
+            refreshAnalyzeButtons();
             runningAnalyses += 1;
 
             analyzeButton.innerHTML = `
@@ -3735,6 +3752,12 @@
                 }
 
                 if (!response.ok) {
+                    // 503 means Ollama or the LLM failed; the service status
+                    // shown at the top may be out of date.
+                    if (response.status === 503) {
+                        checkServiceStatus();
+                    }
+
                     throw data;
                 }
 
@@ -3750,7 +3773,8 @@
 
             } finally {
                 runningAnalyses -= 1;
-                analyzeButton.disabled = false;
+                singleAnalysisRunning = false;
+                refreshAnalyzeButtons();
                 analyzeButton.textContent = "Analyze Bug";
             }
         });
@@ -3772,33 +3796,67 @@
             fields.bugTitle.input.focus();
         });
 
-        function updateServiceStatusUI(available) {
-            statusDot.classList.remove(
-                "checking",
-                "available",
-                "unavailable"
-            );
+        // Prefix of batch errors caused by Ollama or the LLM (see app/api/bugs.py).
+        const LLM_ERROR_PREFIX = "The LLM could not analyze this bug";
 
-            if (available) {
-                statusDot.classList.add("available");
+        const SERVICE_STATUS_LABELS = {
+            checking: "Checking...",
+            available: "Available",
+            unavailable: "Unavailable"
+        };
 
-                serviceValue.textContent = "Available";
-                analyzeButton.disabled = false;
+        // The only place that changes the service status at the top, so the
+        // status, the diagnosis button and both analyze buttons stay in sync.
+        function setServiceStatus(status) {
+            serviceStatus = status;
 
-                diagnosisButton.textContent = "✓";
-                diagnosisButton.classList.add("diagnosis-available");
-                diagnosisButton.style.display = "flex";
+            statusDot.classList.remove("checking", "available", "unavailable");
+            statusDot.classList.add(status);
+            serviceValue.textContent = SERVICE_STATUS_LABELS[status];
 
+            if (status === "checking") {
+                diagnosisButton.style.display = "none";
             } else {
-                statusDot.classList.add("unavailable");
+                const available = status === "available";
 
-                serviceValue.textContent = "Unavailable";
-                analyzeButton.disabled = true;
-
-                diagnosisButton.classList.remove("diagnosis-available");
-                diagnosisButton.textContent = "⚠";
+                diagnosisButton.textContent = available ? "✓" : "⚠";
+                diagnosisButton.classList.toggle("diagnosis-available", available);
                 diagnosisButton.style.display = "flex";
             }
+
+            refreshAnalyzeButtons();
+        }
+
+        function renderDiagnosisMessage(statusClass, statusLabel, message) {
+            serviceDiagnosisMessage.innerHTML = `
+            <div class="diagnosis-item">
+                <div class="diagnosis-item-header">
+                    <span class="diagnosis-status-dot ${statusClass}"></span>
+                    <span class="diagnosis-item-title">Connection Check</span>
+                    <span class="diagnosis-status-text ${statusClass}">${statusLabel}</span>
+                </div>
+                <div class="diagnosis-item-message">${escapeHtml(message)}</div>
+            </div>
+        `;
+        }
+
+        // Runs the full diagnosis and updates both the diagnosis window and
+        // the status at the top from the same result.
+        async function runDiagnosis() {
+            const data = await getAnalysisDiagnosisData();
+
+            if (!data) {
+                renderDiagnosisMessage(
+                    "unavailable",
+                    "Failed",
+                    "Could not connect to the analysis service."
+                );
+                setServiceStatus("unavailable");
+                return;
+            }
+
+            serviceDiagnosisMessage.innerHTML = getAnalysisDiagnosis(data);
+            setServiceStatus(data.available ? "available" : "unavailable");
         }
 
         /*
@@ -3806,236 +3864,47 @@
          */
 
         async function checkServiceStatus() {
-            statusDot.classList.remove(
-                "checking",
-                "available",
-                "unavailable"
-            );
+            setServiceStatus("checking");
 
-            statusDot.classList.add("checking");
+            const data = await checkAnalysisHealth();
 
-            serviceValue.textContent = "Checking...";
-            diagnosisButton.style.display = "none";
-
-            try {
-                const data = await checkAnalysisHealth();
-
-                updateServiceStatusUI(data.available);
-
-                if (data.available) {
-                    return;
-                }
-
-                const diagnosisData = await getAnalysisDiagnosisData();
-
-                serviceDiagnosisMessage.innerHTML =
-                    getAnalysisDiagnosis(diagnosisData);
-
-            } catch (error) {
-
-                updateServiceStatusUI(false);
-
-                serviceDiagnosisMessage.innerHTML = `
-            <div class="diagnosis-item">
-                <div class="diagnosis-item-header">
-
-                    <span class="diagnosis-status-dot unavailable"></span>
-
-                    <span class="diagnosis-item-title">
-                        Connection Check
-                    </span>
-
-                    <span class="diagnosis-status-text unavailable">
-                        Failed
-                    </span>
-
-                </div>
-
-                <div class="diagnosis-item-message">
-                    Could not connect to the analysis service.
-                </div>
-            </div>
-        `;
+            if (data.available) {
+                setServiceStatus("available");
+                return;
             }
+
+            // Prepare the diagnosis window so the reason is ready when the
+            // user opens it.
+            await runDiagnosis();
         }
 
-
         /*
-         * Retry diagnosis
+         * Diagnosis window and Retry Connection
          */
 
-        async function retryAnalysisConnection() {
+        async function refreshDiagnosis() {
             diagnosisRetryButton.disabled = true;
             diagnosisRetryButton.textContent = "Checking...";
 
-            serviceDiagnosisMessage.innerHTML = `
-        <div class="diagnosis-item">
-            <div class="diagnosis-item-header">
-
-                <span class="diagnosis-status-dot checking"></span>
-
-                <span class="diagnosis-item-title">
-                    Connection Check
-                </span>
-
-                <span class="diagnosis-status-text checking">
-                    Checking
-                </span>
-
-            </div>
-
-            <div class="diagnosis-item-message">
-                Checking Ollama, required model and inference...
-            </div>
-        </div>
-    `;
+            renderDiagnosisMessage(
+                "checking",
+                "Checking",
+                "Checking Ollama, required model and inference..."
+            );
 
             try {
-                const diagnosisData = await getAnalysisDiagnosisData();
-
-                if (!diagnosisData) {
-                    throw new Error("No diagnostic information was returned.");
-                }
-
-                // Update diagnosis modal
-                serviceDiagnosisMessage.innerHTML =
-                    getAnalysisDiagnosis(diagnosisData);
-
-                // Update main service status
-                if (diagnosisData.available) {
-                    statusDot.classList.remove(
-                        "checking",
-                        "available",
-                        "unavailable"
-                    );
-
-                    statusDot.classList.add("available");
-
-                    serviceValue.textContent = "Available";
-                    analyzeButton.disabled = false;
-
-                    diagnosisButton.textContent = "✓";
-                    diagnosisButton.classList.add("diagnosis-available");
-                    diagnosisButton.style.display = "flex";
-
-                } else {
-                    statusDot.classList.remove(
-                        "checking",
-                        "available",
-                        "unavailable"
-                    );
-
-                    statusDot.classList.add("unavailable");
-
-                    serviceValue.textContent = "Unavailable";
-                    analyzeButton.disabled = true;
-
-                    diagnosisButton.classList.remove("diagnosis-available");
-                    diagnosisButton.textContent = "⚠";
-                    diagnosisButton.style.display = "flex";
-                }
-
-            } catch (error) {
-                serviceDiagnosisMessage.innerHTML = `
-            <div class="diagnosis-item">
-
-                <div class="diagnosis-item-header">
-
-                    <span class="diagnosis-status-dot unavailable"></span>
-
-                    <span class="diagnosis-item-title">
-                        Connection Check
-                    </span>
-
-                    <span class="diagnosis-status-text unavailable">
-                        Failed
-                    </span>
-
-                </div>
-
-                <div class="diagnosis-item-message">
-                    Could not complete the diagnosis check.
-                </div>
-
-            </div>
-        `;
-
+                await runDiagnosis();
             } finally {
                 diagnosisRetryButton.disabled = false;
                 diagnosisRetryButton.textContent = "Retry Connection";
             }
         }
 
-
-        /*
-         * Diagnosis modal
-         */
-
-        diagnosisButton.addEventListener("click", async () => {
+        diagnosisButton.addEventListener("click", () => {
             diagnosisModal.hidden = false;
             document.body.style.overflow = "hidden";
 
-            diagnosisRetryButton.disabled = true;
-            diagnosisRetryButton.textContent = "Checking...";
-
-            serviceDiagnosisMessage.innerHTML = `
-        <div class="diagnosis-item">
-            <div class="diagnosis-item-header">
-
-                <span class="diagnosis-status-dot checking"></span>
-
-                <span class="diagnosis-item-title">
-                    Connection Check
-                </span>
-
-                <span class="diagnosis-status-text checking">
-                    Checking
-                </span>
-
-            </div>
-
-            <div class="diagnosis-item-message">
-                Checking Ollama, required model and inference...
-            </div>
-        </div>
-    `;
-
-            try {
-                const diagnosisData = await getAnalysisDiagnosisData();
-
-                if (!diagnosisData) {
-                    throw new Error("No diagnostic information was returned.");
-                }
-
-                serviceDiagnosisMessage.innerHTML =
-                    getAnalysisDiagnosis(diagnosisData);
-
-            } catch (error) {
-                serviceDiagnosisMessage.innerHTML = `
-            <div class="diagnosis-item">
-                <div class="diagnosis-item-header">
-
-                    <span class="diagnosis-status-dot unavailable"></span>
-
-                    <span class="diagnosis-item-title">
-                        Connection Check
-                    </span>
-
-                    <span class="diagnosis-status-text unavailable">
-                        Failed
-                    </span>
-
-                </div>
-
-                <div class="diagnosis-item-message">
-                    Could not complete the diagnosis check.
-                </div>
-            </div>
-        `;
-            } finally {
-                diagnosisRetryButton.disabled = false;
-                diagnosisRetryButton.textContent = "Retry Connection";
-            }
+            refreshDiagnosis();
         });
 
 
@@ -4073,10 +3942,7 @@
          * Retry Connection button
          */
 
-        diagnosisRetryButton.addEventListener(
-            "click",
-            retryAnalysisConnection
-        );
+        diagnosisRetryButton.addEventListener("click", refreshDiagnosis);
 
 
         /*
