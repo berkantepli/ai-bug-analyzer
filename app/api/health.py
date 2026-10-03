@@ -2,6 +2,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 import json
 import logging
+import re
 
 from fastapi import APIRouter
 
@@ -19,6 +20,12 @@ router = APIRouter(
 
 
 OLLAMA_TAGS_URL = f"{OLLAMA_URL}/api/tags"
+
+INFERENCE_TEST_ANSWER = "INFERENCE_TEST"
+
+# Loading the model after Ollama starts can take well over 15 seconds on a
+# machine with little free memory.
+INFERENCE_TEST_TIMEOUT_SECONDS = 60
 
 
 def check_ollama() -> dict:
@@ -46,9 +53,7 @@ def check_ollama() -> dict:
         return {
             "status": "unavailable",
             "reason": f"Could not connect to Ollama at {OLLAMA_URL}.",
-            "suggested_action": (
-                "Make sure Ollama is running and listening on port 11434."
-            ),
+            "suggested_action": f"Make sure Ollama is running at {OLLAMA_URL}.",
             "models": [],
         }
 
@@ -134,9 +139,13 @@ def check_inference(ollama_result: dict, model_result: dict) -> dict:
         payload = json.dumps(
             {
                 "model": OLLAMA_MODEL,
-                "prompt": "Reply with exactly: INFERENCE_TEST",
+                "prompt": f"Reply with exactly: {INFERENCE_TEST_ANSWER}",
                 "stream": False,
-                "options": {"num_ctx": OLLAMA_CONTEXT_LENGTH},
+                "options": {
+                    "num_ctx": OLLAMA_CONTEXT_LENGTH,
+                    "temperature": 0,
+                    "num_predict": 10,
+                },
             }
         ).encode("utf-8")
 
@@ -149,7 +158,7 @@ def check_inference(ollama_result: dict, model_result: dict) -> dict:
             },
         )
 
-        with urlopen(request, timeout=15) as response:
+        with urlopen(request, timeout=INFERENCE_TEST_TIMEOUT_SECONDS) as response:
             data = json.loads(response.read().decode("utf-8"))
 
         response_model = data.get("model")
@@ -166,8 +175,9 @@ def check_inference(ollama_result: dict, model_result: dict) -> dict:
                 "suggested_action": (f"Make sure Ollama is using {OLLAMA_MODEL}."),
             }
 
-        # Verify that the model actually generated the expected response.
-        if response_text != "INFERENCE_TEST":
+        # Verify that the model actually generated the expected response,
+        # tolerating case, spacing and punctuation such as a trailing period.
+        if re.sub(r"[^A-Z_]", "", response_text.upper()) != INFERENCE_TEST_ANSWER:
             return {
                 "status": "unavailable",
                 "reason": (
