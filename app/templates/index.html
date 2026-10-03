@@ -704,6 +704,10 @@
             color: var(--critical-text);
         }
 
+        .batch-columns-info {
+            grid-column: 1 / -1;
+        }
+
         .batch-retry-button {
             margin-top: 12px;
             padding: 8px 14px;
@@ -3397,6 +3401,38 @@
 
                 resultGrid.appendChild(notice);
                 refreshAnalyzeButtons();
+            }
+
+            // Shown when the Excel headers were not recognized and the LLM
+            // matched them, so the user can check the matching.
+            if (data.detected_columns) {
+                const fieldLabels = {
+                    title: "Title",
+                    description: "Description",
+                    steps_to_reproduce: "Steps to Reproduce",
+                    expected_result: "Expected Result",
+                    actual_result: "Actual Result",
+                    severity: "Severity",
+                    priority: "Priority",
+                    category: "Category"
+                };
+
+                const columnsInfo = document.createElement("div");
+                columnsInfo.className = "result-item batch-columns-info";
+
+                const columnsLabel = document.createElement("div");
+                columnsLabel.className = "result-label";
+                columnsLabel.textContent = "Columns detected automatically";
+
+                const columnsText = document.createElement("div");
+                columnsText.className = "result-value";
+                columnsText.textContent = Object.entries(fieldLabels)
+                    .filter(([field]) => data.detected_columns[field])
+                    .map(([field, label]) => `${data.detected_columns[field]} → ${label}`)
+                    .join(" · ");
+
+                columnsInfo.append(columnsLabel, columnsText);
+                resultGrid.appendChild(columnsInfo);
             }
             const labels = {
                 confidence: "Confidence",
