@@ -48,8 +48,14 @@ def llm_message(content: dict) -> dict:
     return {"message": {"content": json.dumps(content)}}
 
 
-def validity(valid=True, reason="") -> dict:
-    return llm_message({"is_valid_bug_report": valid, "invalid_reason": reason})
+def validity(language="English", valid=True, reason="") -> dict:
+    return llm_message(
+        {
+            "report_language": language,
+            "is_valid_bug_report": valid,
+            "invalid_reason": reason,
+        }
+    )
 
 
 def fake_ollama(monkeypatch, *responses) -> list[dict]:
@@ -85,21 +91,25 @@ def test_invalid_bug_report_is_rejected_before_analysis(monkeypatch) -> None:
     assert len(payloads) == 1
 
 
-def test_valid_bug_report_is_analyzed_after_validity_check(monkeypatch) -> None:
-    payloads = fake_ollama(monkeypatch, validity(), llm_message(ANALYSIS_FIELDS))
+def test_analysis_is_written_in_the_detected_language(monkeypatch) -> None:
+    payloads = fake_ollama(
+        monkeypatch, validity(language="German"), llm_message(ANALYSIS_FIELDS)
+    )
 
     analysis = asyncio.run(llm_analyzer.analyze_with_llm(BUG))
 
     validity_call, analysis_call = payloads
-    assert "is_valid_bug_report" in validity_call["format"]["properties"]
-    assert "is_valid_bug_report" not in analysis_call["format"]["properties"]
+    assert "report_language" in validity_call["format"]["properties"]
+    assert "Write all free-text values in German" in (
+        analysis_call["messages"][0]["content"]
+    )
     assert analysis.severity == "LOW"
 
 
 def test_screenshot_is_only_sent_with_the_analysis(monkeypatch) -> None:
     payloads = fake_ollama(
         monkeypatch,
-        validity(),
+        validity(language="Turkish"),
         llm_message(
             {
                 **ANALYSIS_FIELDS,
@@ -117,6 +127,9 @@ def test_screenshot_is_only_sent_with_the_analysis(monkeypatch) -> None:
     validity_call, analysis_call = payloads
     assert validity_call["messages"][0]["images"] == []
     assert analysis_call["messages"][0]["images"] != []
+    assert "Write all free-text values in Turkish" in (
+        analysis_call["messages"][0]["content"]
+    )
     assert analysis.visual_evidence == "The screenshot shows the disabled button."
     assert analysis.confidence == 0.9
 

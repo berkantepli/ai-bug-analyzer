@@ -17,6 +17,8 @@ OLLAMA_CHAT_URL = f"{OLLAMA_URL}/api/chat"
 
 
 class ReportValidity(BaseModel):
+    # Detected first so the rest of the answer can be written in it.
+    report_language: str
     is_valid_bug_report: bool
     # Required so the model always writes a reason; empty when valid.
     invalid_reason: str
@@ -41,6 +43,11 @@ class InvalidBugReportError(Exception):
 
 
 VALIDITY_RULE = """
+Set report_language to the language the reporter wrote the report in,
+as an English name such as "English" or "Turkish". Ignore quoted UI text,
+button labels, error messages and technical terms when deciding: they are
+often in English even when the report itself is written in another language.
+
 Decide whether the written text is a genuine software bug report.
 Set is_valid_bug_report to false ONLY when the text is:
 - random characters or keyboard mashing
@@ -52,8 +59,12 @@ Short, vague or incomplete reports about software are VALID.
 For example a report titled "Bug" saying "It does not work" is valid.
 
 When is_valid_bug_report is false, invalid_reason must be one short
-English sentence explaining what is wrong with the input, for example
-"The text describes a cake recipe, not software behavior."
+sentence explaining what is wrong with the input, written in
+report_language and never in another language. Examples:
+- English report: "The text describes a cake recipe, not software behavior."
+- Turkish report: "Metin bir kek tarifini anlatıyor, yazılım davranışını değil."
+For any other language, write the same kind of sentence in that language
+(for example German for a German report); do not reuse the English example.
 When is_valid_bug_report is true, invalid_reason must be an empty string.
 """.strip()
 
@@ -82,6 +93,7 @@ def build_validity_prompt(bug: BugReportCreate) -> str:
 You are an experienced Software QA Engineer reviewing a bug report.
 
 Return ONLY valid JSON with exactly these fields:
+- report_language
 - is_valid_bug_report
 - invalid_reason
 
@@ -91,7 +103,7 @@ Return ONLY valid JSON with exactly these fields:
 """.strip()
 
 
-def build_prompt(bug: BugReportCreate, has_screenshot: bool) -> str:
+def build_prompt(bug: BugReportCreate, has_screenshot: bool, language: str) -> str:
     screenshot_instruction = (
         """
 A screenshot is provided.
@@ -143,6 +155,9 @@ The visual_evidence field must be null.
 
     return f"""
 You are an experienced Software QA Engineer analyzing a bug report.
+
+IMPORTANT: The report is written in {language}.
+Write all free-text values in {language}.
 
 Analyze the following bug report and return ONLY valid JSON.
 
@@ -248,6 +263,16 @@ specific scenario, not the overall bug severity.
    Do not use 0.0 unless there is almost no usable evidence.
 
 9. {screenshot_instruction}
+
+10. Language: write every free-text value in {language}, even
+    when the screenshot or quoted UI text is in another language.
+    Quoted UI text may stay as it appears on screen.
+    This applies to impact, possible_root_cause, missing_information,
+    visual_evidence and the test scenario scenario, expected_result and
+    purpose.
+    Keep these values in English so they can be grouped across reports:
+    severity, priority, category, and the test scenario type, priority
+    and category.
 
 Return only the JSON object.
 """.strip()
@@ -364,15 +389,19 @@ async def analyze_with_llm(
 
         images.append(base64.b64encode(image_bytes).decode("utf-8"))
 
-    # Judge the written report on its own first, so a screenshot of another
-    # page cannot reject a valid report.
+    # Judge the written report on its own first: a screenshot of another
+    # page must not reject a valid report, and the detected language is
+    # named explicitly in the analysis prompt, which the model follows far
+    # more reliably than "answer in the report's language".
     validity = _validate(
         ReportValidity,
         await _request_json(build_validity_prompt(bug), [], ReportValidity),
     )
     _raise_if_invalid(validity)
 
-    prompt = build_prompt(bug, has_screenshot=bool(images))
+    prompt = build_prompt(
+        bug, has_screenshot=bool(images), language=validity.report_language
+    )
 
     if not images:
         return _validate(BugAnalysis, await _request_json(prompt, [], BugAnalysis))
