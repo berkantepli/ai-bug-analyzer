@@ -60,6 +60,49 @@ def excel_bytes(rows) -> bytes:
     return output.getvalue()
 
 
+# ---------------- requests from other websites ----------------
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Sec-Fetch-Site": "cross-site"},
+        {"Sec-Fetch-Site": "same-site"},
+        {"Origin": "https://evil.example"},
+        {"Origin": "null"},
+    ],
+)
+def test_analysis_requests_from_other_websites_are_rejected(fake_llm, headers) -> None:
+    response = client.post("/bugs/analyze", data=VALID_BUG, headers=headers)
+
+    assert response.status_code == 403
+
+
+def test_inference_health_check_from_other_websites_is_rejected() -> None:
+    response = client.get(
+        "/health/analysis", headers={"Sec-Fetch-Site": "cross-site"}
+    )
+
+    assert response.status_code == 403
+
+
+def test_same_origin_requests_are_allowed(fake_llm) -> None:
+    response = client.post(
+        "/bugs/analyze",
+        data=VALID_BUG,
+        headers={"Sec-Fetch-Site": "same-origin", "Origin": "http://testserver"},
+    )
+
+    assert response.status_code == 200
+
+
+def test_page_and_basic_health_check_stay_reachable_from_links() -> None:
+    headers = {"Sec-Fetch-Site": "cross-site"}
+
+    assert client.get("/", headers=headers).status_code == 200
+    assert client.get("/health", headers=headers).status_code == 200
+
+
 # ---------------- screenshots ----------------
 
 
