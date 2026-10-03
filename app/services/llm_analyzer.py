@@ -68,6 +68,10 @@ class ContextTooLargeError(RuntimeError):
     """The report and screenshots do not fit into the model's context window."""
 
 
+class OllamaUnavailableError(RuntimeError):
+    """Ollama could not be reached or did not answer in time."""
+
+
 VALIDITY_RULE = """
 Set report_language to the language the reporter wrote the report in,
 as an English name such as "English" or "Turkish". Ignore quoted UI text,
@@ -339,14 +343,14 @@ def _call_ollama(payload: dict) -> dict:
         raise RuntimeError(f"Ollama returned HTTP {error.code}.") from error
 
     except URLError as error:
-        raise RuntimeError(
+        raise OllamaUnavailableError(
             "Could not connect to Ollama. "
             f"Make sure Ollama is running on {OLLAMA_URL}."
         ) from error
 
     # On Python 3.9 a read timeout is socket.timeout, not TimeoutError.
     except (TimeoutError, socket.timeout) as error:
-        raise RuntimeError(
+        raise OllamaUnavailableError(
             f"Ollama did not respond within {OLLAMA_TIMEOUT_SECONDS} seconds. "
             "Try again, or use fewer screenshots or a shorter text."
         ) from error

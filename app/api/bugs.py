@@ -9,6 +9,7 @@ from app.schemas.bug import BugReportCreate
 from app.services.llm_analyzer import (
     ContextTooLargeError,
     InvalidBugReportError,
+    OllamaUnavailableError,
     analyze_with_llm,
 )
 from app.services.batch_analyzer import parse_bug_spreadsheet
@@ -104,6 +105,7 @@ async def process_batch_record(
     record: dict,
     semaphore: asyncio.Semaphore,
     progress: dict,
+    batch_state: dict,
 ) -> dict:
     values = record["values"]
     result = {
@@ -139,7 +141,23 @@ async def process_batch_record(
         )
 
         async with semaphore:
+            # Once Ollama is unreachable, the remaining bugs are not sent:
+            # each one would fail the same way or wait for the full timeout.
+            if batch_state["ollama_error"]:
+                progress["failed"] += 1
+                result["error"] = (
+                    "The LLM could not analyze this bug: Ollama became "
+                    "unavailable earlier in this batch, so it was not analyzed."
+                )
+                return result
+
             analysis = await analyze_with_llm(bug)
+
+    except OllamaUnavailableError as error:
+        progress["failed"] += 1
+        batch_state["ollama_error"] = batch_state["ollama_error"] or str(error)
+        result["error"] = f"The LLM could not analyze this bug: {error}"
+        return result
 
     except InvalidBugReportError as error:
         progress["failed"] += 1
@@ -261,10 +279,11 @@ async def analyze_bug_batch(
         worker_count = calculate_worker_count(total)
 
         semaphore = asyncio.Semaphore(worker_count)
+        batch_state = {"ollama_error": None}
 
         results = await asyncio.gather(
             *(
-                process_batch_record(record, semaphore, progress)
+                process_batch_record(record, semaphore, progress, batch_state)
                 for record in records
             )
         )
@@ -281,6 +300,14 @@ async def analyze_bug_batch(
             "duplicates": duplicates,
             "rejected": rejected,
             "workers": worker_count,
+            # Set when Ollama became unreachable and the batch stopped
+            # sending the remaining bugs.
+            "stopped_reason": (
+                f"Ollama became unavailable during the batch: "
+                f"{batch_state['ollama_error']}"
+                if batch_state["ollama_error"]
+                else None
+            ),
             "bugs": results,
         }
     finally:

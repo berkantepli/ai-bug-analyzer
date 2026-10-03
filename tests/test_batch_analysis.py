@@ -8,7 +8,7 @@ import httpx
 from app.api import bugs
 from app.main import app
 from app.schemas.analysis import BugAnalysis
-from app.services.llm_analyzer import InvalidBugReportError
+from app.services.llm_analyzer import InvalidBugReportError, OllamaUnavailableError
 
 
 client = TestClient(app)
@@ -322,6 +322,54 @@ def test_batch_endpoint_marks_too_long_rows_as_failed(monkeypatch) -> None:
     bug = response.json()["bugs"][0]
     assert bug["status"] == "failed"
     assert bug["error"] == "Description is longer than 5000 characters."
+
+
+def test_batch_stops_sending_bugs_once_ollama_is_unavailable(monkeypatch) -> None:
+    analyzed_titles = []
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        analyzed_titles.append(bug.title)
+        raise OllamaUnavailableError("Could not connect to Ollama.")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            HEADER,
+            ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error"),
+            ("Logout fails", "Cannot sign out", "1. Logout", "Login page", "Error"),
+            ("Search fails", "No results", "1. Search", "Results", "Empty list"),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    data = response.json()
+    assert analyzed_titles == ["Login fails"]
+    assert data["failed"] == 3
+    assert data["stopped_reason"] == (
+        "Ollama became unavailable during the batch: Could not connect to Ollama."
+    )
+    first, *skipped = data["bugs"]
+    assert first["error"] == (
+        "The LLM could not analyze this bug: Could not connect to Ollama."
+    )
+    assert all("was not analyzed" in bug["error"] for bug in skipped)
+
+
+def test_batch_without_ollama_errors_has_no_stopped_reason(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [HEADER, ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error")]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.json()["stopped_reason"] is None
 
 
 def test_batch_endpoint_finds_header_below_report_title(monkeypatch) -> None:

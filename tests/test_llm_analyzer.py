@@ -2,7 +2,7 @@ import asyncio
 import json
 import socket
 from io import BytesIO
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -193,7 +193,19 @@ def test_ollama_timeout_becomes_a_clear_error(monkeypatch) -> None:
 
     monkeypatch.setattr(llm_analyzer, "urlopen", slow_urlopen)
 
-    with pytest.raises(RuntimeError) as error:
+    with pytest.raises(llm_analyzer.OllamaUnavailableError) as error:
         llm_analyzer._call_ollama({})
 
     assert str(error.value).startswith("Ollama did not respond within 120 seconds.")
+
+
+def test_unreachable_ollama_is_reported_as_unavailable(monkeypatch) -> None:
+    def unreachable(request, timeout):
+        raise URLError("connection refused")
+
+    monkeypatch.setattr(llm_analyzer, "urlopen", unreachable)
+
+    with pytest.raises(llm_analyzer.OllamaUnavailableError) as error:
+        llm_analyzer._call_ollama({})
+
+    assert str(error.value).startswith("Could not connect to Ollama.")

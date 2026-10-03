@@ -693,6 +693,16 @@
             gap: 12px;
         }
 
+        .batch-stopped-notice {
+            grid-column: 1 / -1;
+            border-color: var(--critical-border);
+            background: var(--critical-bg);
+        }
+
+        .batch-stopped-notice .result-value {
+            color: var(--critical-text);
+        }
+
         .summary-panel {
             grid-column: 1 / -1;
             border: 1px solid var(--border);
@@ -3232,6 +3242,24 @@
             }
 
             resultHeading.textContent = `Batch Analysis Result`;
+
+            if (data.stopped_reason) {
+                const notice = document.createElement("div");
+                notice.className = "result-item batch-stopped-notice";
+                notice.setAttribute("role", "alert");
+
+                const noticeLabel = document.createElement("div");
+                noticeLabel.className = "result-label";
+                noticeLabel.textContent = "Batch stopped";
+
+                const noticeText = document.createElement("div");
+                noticeText.className = "result-value";
+                noticeText.textContent =
+                    `${data.stopped_reason} The remaining bugs were not analyzed.`;
+
+                notice.append(noticeLabel, noticeText);
+                resultGrid.appendChild(notice);
+            }
             const labels = {
                 confidence: "Confidence",
                 priority: "Priority",
