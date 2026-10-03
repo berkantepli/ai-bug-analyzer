@@ -1,3 +1,4 @@
+from datetime import date, datetime, time
 from io import BytesIO
 import re
 
@@ -61,6 +62,47 @@ REQUIRED_FIELDS = (
 
 
 HEADER_SEARCH_ROWS = 20
+
+
+def _format_number(value: float) -> str:
+    if float(value).is_integer():
+        return str(int(value))
+    return format(value, ".15g")
+
+
+def _format_datetime(value: datetime) -> str:
+    if value.time() == time():
+        return value.date().isoformat()
+    timespec = "minutes" if value.second == 0 else "seconds"
+    return value.isoformat(sep=" ", timespec=timespec)
+
+
+def _format_cell(value: object, number_format: str = "General") -> object:
+    """Render numbers, percentages and dates the way Excel displays them."""
+    if value is None or isinstance(value, (bool, str)):
+        return value
+    if isinstance(value, datetime):
+        return _format_datetime(value)
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, (int, float)):
+        if "%" in number_format:
+            return f"{_format_number(value * 100)}%"
+        return _format_number(value)
+    return value
+
+
+def _xls_cell_value(workbook: xlrd.book.Book, cell: xlrd.sheet.Cell) -> object:
+    if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK, xlrd.XL_CELL_ERROR):
+        return None
+    if cell.ctype == xlrd.XL_CELL_BOOLEAN:
+        return bool(cell.value)
+    if cell.ctype == xlrd.XL_CELL_DATE:
+        return _format_cell(xlrd.xldate.xldate_as_datetime(cell.value, workbook.datemode))
+    if cell.ctype == xlrd.XL_CELL_NUMBER:
+        format_key = workbook.xf_list[cell.xf_index].format_key
+        return _format_cell(cell.value, workbook.format_map[format_key].format_str)
+    return cell.value
 
 
 def _normalize_header(value: object) -> str:
@@ -159,13 +201,22 @@ async def parse_bug_spreadsheet(file: UploadFile) -> list[dict]:
         if filename.endswith(".xlsx"):
             workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
             try:
-                rows = list(workbook.active.iter_rows(min_row=1, values_only=True))
+                rows = [
+                    tuple(
+                        _format_cell(cell.value, cell.number_format or "General")
+                        for cell in row
+                    )
+                    for row in workbook.active.iter_rows(min_row=1)
+                ]
             finally:
                 workbook.close()
         elif filename.endswith(".xls"):
-            workbook = xlrd.open_workbook(file_contents=content)
+            workbook = xlrd.open_workbook(file_contents=content, formatting_info=True)
             sheet = workbook.sheet_by_index(0)
-            rows = [tuple(sheet.row_values(index)) for index in range(sheet.nrows)]
+            rows = [
+                tuple(_xls_cell_value(workbook, cell) for cell in sheet.row(index))
+                for index in range(sheet.nrows)
+            ]
         else:
             raise HTTPException(
                 status_code=415,
