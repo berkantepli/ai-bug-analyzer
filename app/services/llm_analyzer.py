@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import logging
+import socket
 from typing import Optional
 
 from urllib.request import Request, urlopen
@@ -15,6 +16,7 @@ from app.schemas.bug import BugReportCreate
 
 
 OLLAMA_CHAT_URL = f"{OLLAMA_URL}/api/chat"
+OLLAMA_TIMEOUT_SECONDS = 120
 
 # Raw Ollama errors and validation dumps go to the server log only; users
 # see a short message.
@@ -60,6 +62,10 @@ MISMATCHED_SCREENSHOT_MAX_CONFIDENCE = 0.6
 
 class InvalidBugReportError(Exception):
     """The LLM judged the input not to be a meaningful bug report."""
+
+
+class ContextTooLargeError(RuntimeError):
+    """The report and screenshots do not fit into the model's context window."""
 
 
 VALIDITY_RULE = """
@@ -317,12 +323,18 @@ def _call_ollama(payload: dict) -> dict:
     )
 
     try:
-        with urlopen(request, timeout=120) as response:
+        with urlopen(request, timeout=OLLAMA_TIMEOUT_SECONDS) as response:
             response_data = response.read().decode("utf-8")
 
     except HTTPError as error:
         error_body = error.read().decode("utf-8", errors="replace")
         logger.warning("Ollama returned HTTP %s: %s", error.code, error_body)
+
+        if "exceed_context_size_error" in error_body:
+            raise ContextTooLargeError(
+                "The report and screenshots are too long for the model to "
+                "process. Use fewer screenshots or a shorter text."
+            ) from error
 
         raise RuntimeError(f"Ollama returned HTTP {error.code}.") from error
 
@@ -330,6 +342,13 @@ def _call_ollama(payload: dict) -> dict:
         raise RuntimeError(
             "Could not connect to Ollama. "
             f"Make sure Ollama is running on {OLLAMA_URL}."
+        ) from error
+
+    # On Python 3.9 a read timeout is socket.timeout, not TimeoutError.
+    except (TimeoutError, socket.timeout) as error:
+        raise RuntimeError(
+            f"Ollama did not respond within {OLLAMA_TIMEOUT_SECONDS} seconds. "
+            "Try again, or use fewer screenshots or a shorter text."
         ) from error
 
     try:

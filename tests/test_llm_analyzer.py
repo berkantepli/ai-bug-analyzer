@@ -1,5 +1,8 @@
 import asyncio
 import json
+import socket
+from io import BytesIO
+from urllib.error import HTTPError
 
 import pytest
 
@@ -165,3 +168,32 @@ def test_every_request_uses_the_configured_context_length(monkeypatch) -> None:
         OLLAMA_CONTEXT_LENGTH,
         OLLAMA_CONTEXT_LENGTH,
     ]
+
+
+def test_context_overflow_becomes_a_clear_error(monkeypatch) -> None:
+    body = (
+        b'{"error": "request (20000 tokens) exceeds the available context size", '
+        b'"type": "exceed_context_size_error"}'
+    )
+
+    def failing_urlopen(request, timeout):
+        raise HTTPError(request.full_url, 400, "Bad Request", {}, BytesIO(body))
+
+    monkeypatch.setattr(llm_analyzer, "urlopen", failing_urlopen)
+
+    with pytest.raises(llm_analyzer.ContextTooLargeError) as error:
+        llm_analyzer._call_ollama({})
+
+    assert "Use fewer screenshots or a shorter text" in str(error.value)
+
+
+def test_ollama_timeout_becomes_a_clear_error(monkeypatch) -> None:
+    def slow_urlopen(request, timeout):
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr(llm_analyzer, "urlopen", slow_urlopen)
+
+    with pytest.raises(RuntimeError) as error:
+        llm_analyzer._call_ollama({})
+
+    assert str(error.value).startswith("Ollama did not respond within 120 seconds.")

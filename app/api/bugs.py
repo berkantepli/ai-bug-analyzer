@@ -6,7 +6,11 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
 
-from app.services.llm_analyzer import InvalidBugReportError, analyze_with_llm
+from app.services.llm_analyzer import (
+    ContextTooLargeError,
+    InvalidBugReportError,
+    analyze_with_llm,
+)
 from app.services.batch_analyzer import parse_bug_spreadsheet
 from app.services.readability import (
     field_length_error,
@@ -210,6 +214,8 @@ async def analyze_bug(
         raise HTTPException(
             status_code=422, detail=f"Not a valid bug report: {error}"
         ) from error
+    except ContextTooLargeError as error:
+        raise HTTPException(status_code=413, detail=str(error)) from error
 
 
 @router.post("/batch")

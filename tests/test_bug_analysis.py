@@ -2,7 +2,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.schemas.analysis import BugAnalysis
-from app.services.llm_analyzer import InvalidBugReportError
+from app.services.llm_analyzer import ContextTooLargeError, InvalidBugReportError
 
 
 client = TestClient(app)
@@ -128,3 +128,15 @@ def test_bug_analysis_rejects_too_long_field(monkeypatch) -> None:
     assert response.json() == {
         "detail": "Description is longer than 5000 characters."
     }
+
+
+def test_bug_analysis_explains_context_overflow(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        raise ContextTooLargeError("The report and screenshots are too long.")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    response = client.post("/bugs/analyze", data=VALID_BUG)
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "The report and screenshots are too long."}

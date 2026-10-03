@@ -208,6 +208,7 @@ The app is built to run **locally for a single user**:
 ## Limitations
 
 - Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, and a batch is processed bug by bug.
+- Very large screenshots use many tokens; if a report and its screenshots still do not fit into the context window, the analysis is rejected with a message asking for fewer screenshots or a shorter text.
 - Excel header names must be in English. Cell contents can be in any language.
 - Formula cells are only read correctly if the file was saved by Excel (cached values).
 - AI results are suggestions, not verified defects or confirmed root causes.
