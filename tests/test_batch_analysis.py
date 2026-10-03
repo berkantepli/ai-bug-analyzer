@@ -346,13 +346,15 @@ def test_batch_stops_sending_bugs_once_ollama_is_unavailable(monkeypatch) -> Non
 
     data = response.json()
     assert analyzed_titles == ["Login fails"]
-    assert data["failed"] == 3
+    assert data["failed"] == 0
+    assert data["not_analyzed"] == 3
     assert data["stopped_reason"] == (
         "Ollama became unavailable during the batch: Could not connect to Ollama."
     )
     # The bug that hit the error and the skipped ones look the same; the
     # Ollama error itself is reported once in stopped_reason.
-    assert [bug["error"] for bug in data["bugs"]] == [bugs.OLLAMA_STOPPED_ERROR] * 3
+    assert [bug["status"] for bug in data["bugs"]] == ["not_analyzed"] * 3
+    assert [bug["error"] for bug in data["bugs"]] == [bugs.NOT_ANALYZED_ERROR] * 3
 
 
 def test_batch_without_ollama_errors_has_no_stopped_reason(monkeypatch) -> None:
@@ -458,6 +460,7 @@ def test_batch_progress_reports_rejected_rows_up_front(monkeypatch) -> None:
             "failed": 1,
             "rejected": 1,
             "duplicates": 0,
+            "not_analyzed": 0,
         }
     ]
     assert "tab-a" not in bugs.batch_progress

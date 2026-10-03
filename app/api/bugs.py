@@ -90,7 +90,7 @@ async def _validate_screenshots(screenshots: list[UploadFile]) -> None:
 
 # Shown on every bug that was not analyzed because Ollama failed during the
 # batch; the actual Ollama error is reported once in "stopped_reason".
-OLLAMA_STOPPED_ERROR = (
+NOT_ANALYZED_ERROR = (
     "The LLM could not analyze this bug: Ollama became unavailable during "
     "this batch, so this bug was not analyzed."
 )
@@ -135,6 +135,12 @@ async def process_batch_record(
         result["status"] = "duplicate"
         return result
 
+    def not_analyzed() -> dict:
+        progress["not_analyzed"] += 1
+        result["status"] = "not_analyzed"
+        result["error"] = NOT_ANALYZED_ERROR
+        return result
+
     try:
         bug = BugReportCreate(
             title=values["title"],
@@ -152,17 +158,13 @@ async def process_batch_record(
             # Once Ollama is unreachable, the remaining bugs are not sent:
             # each one would fail the same way or wait for the full timeout.
             if batch_state["ollama_error"]:
-                progress["failed"] += 1
-                result["error"] = OLLAMA_STOPPED_ERROR
-                return result
+                return not_analyzed()
 
             analysis = await analyze_with_llm(bug)
 
     except OllamaUnavailableError as error:
-        progress["failed"] += 1
         batch_state["ollama_error"] = batch_state["ollama_error"] or str(error)
-        result["error"] = OLLAMA_STOPPED_ERROR
-        return result
+        return not_analyzed()
 
     except InvalidBugReportError as error:
         progress["failed"] += 1
@@ -263,6 +265,7 @@ async def analyze_bug_batch(
         "failed": 0,
         "rejected": 0,
         "duplicates": 0,
+        "not_analyzed": 0,
     }
     batch_progress[batch_id] = progress
 
@@ -294,15 +297,17 @@ async def analyze_bug_batch(
         )
 
         failed = sum(result["status"] == "failed" for result in results)
+        not_analyzed = sum(result["status"] == "not_analyzed" for result in results)
 
         progress["status"] = "completed"
 
         return {
             "batch_id": batch_id,
             "total": total,
-            "completed": total - failed - duplicates,
+            "completed": total - failed - duplicates - not_analyzed,
             "failed": failed,
             "duplicates": duplicates,
+            "not_analyzed": not_analyzed,
             "rejected": rejected,
             "workers": worker_count,
             # Set when Ollama became unreachable and the batch stopped

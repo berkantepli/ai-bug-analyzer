@@ -689,7 +689,8 @@
         .batch-summary {
             grid-column: 1 / -1;
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(0, 1fr);
             gap: 12px;
         }
 
@@ -883,6 +884,21 @@
             border-color: var(--duplicate-border);
         }
 
+        .severity-badge.status-not-analyzed {
+            border-color: var(--summary-chip-border);
+            background: var(--summary-chip-bg);
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .batch-bug-card.is-not-analyzed {
+            border-style: dashed;
+        }
+
+        .batch-bug-card.is-not-analyzed .batch-bug-title {
+            color: var(--muted);
+        }
+
         .batch-bug-card.is-duplicate .batch-bug-title {
             color: var(--muted);
         }
@@ -1058,6 +1074,7 @@
             }
 
             .batch-summary {
+                grid-auto-flow: row;
                 grid-template-columns: 1fr;
             }
 
@@ -2591,7 +2608,12 @@
         // Rows rejected while reading the Excel file finish instantly, so they
         // are left out of the live progress and animated in at the end.
         function liveProcessedCount(progress) {
-            return progress.completed + progress.failed - (progress.rejected || 0);
+            return (
+                progress.completed +
+                progress.failed -
+                (progress.rejected || 0) +
+                (progress.not_analyzed || 0)
+            );
         }
 
         function stopBatchProgressPolling() {
@@ -3271,15 +3293,22 @@
 
             const isDuplicateBug = bug => bug.status === "duplicate";
 
+            // Not analyzed because Ollama stopped during the batch; the report
+            // itself has no problem, unlike failed bugs.
+            const isNotAnalyzedBug = bug => bug.status === "not_analyzed";
+
             const isFailedBug = bug =>
                 !isDuplicateBug(bug) &&
+                !isNotAnalyzedBug(bug) &&
                 (bug.status === "failed" ||
                     !bug.analysis ||
                     typeof bug.analysis !== "object");
 
-            const analyses = data.bugs
-                .filter(bug => !isDuplicateBug(bug) && !isFailedBug(bug))
-                .map(bug => bug.analysis);
+            const isAnalyzedBug = bug =>
+                !isDuplicateBug(bug) && !isNotAnalyzedBug(bug) && !isFailedBug(bug);
+
+            const analyses = data.bugs.filter(isAnalyzedBug).map(bug => bug.analysis);
+            const notAnalyzedCount = data.bugs.filter(isNotAnalyzedBug).length;
 
             const overviewHeading = document.createElement("h3");
             overviewHeading.className = "batch-summary-heading";
@@ -3293,7 +3322,8 @@
                 ["Bugs", data.bugs.length],
                 ["Analyzed", analyses.length],
                 ["Failed", data.bugs.filter(isFailedBug).length],
-                ["Duplicates", data.bugs.filter(isDuplicateBug).length]
+                ["Duplicates", data.bugs.filter(isDuplicateBug).length],
+                ...(notAnalyzedCount ? [["Not analyzed", notAnalyzedCount]] : [])
             ];
 
             overviewFields.forEach(([labelText, valueText]) => {
@@ -3419,11 +3449,12 @@
             data.bugs.forEach((bug, index) => {
                 const isFailed = isFailedBug(bug);
                 const isDuplicate = isDuplicateBug(bug);
-                const hasNoAnalysis = isFailed || isDuplicate;
+                const isNotAnalyzed = isNotAnalyzedBug(bug);
+                const hasNoAnalysis = isFailed || isDuplicate || isNotAnalyzed;
                 const duplicateMessage =
                     `This bug is a duplicate of Bug ${bug.duplicate_of}.`;
                 const excelValues = bug.bug || {};
-                const analysis = isFailed
+                const analysis = isFailed || isNotAnalyzed
                     ? {
                         priority: excelValues.priority,
                         category: excelValues.category,
@@ -3438,6 +3469,7 @@
                 bugCard.className = "batch-bug-card";
                 bugCard.classList.toggle("is-failed", isFailed);
                 bugCard.classList.toggle("is-duplicate", isDuplicate);
+                bugCard.classList.toggle("is-not-analyzed", isNotAnalyzed);
 
                 const heading = document.createElement("summary");
                 heading.className = "batch-bug-header";
@@ -3461,6 +3493,15 @@
                     failedBadge.setAttribute("aria-label", failedTooltip);
 
                     heading.appendChild(failedBadge);
+                } else if (isNotAnalyzed) {
+                    const notAnalyzedBadge = document.createElement("span");
+                    notAnalyzedBadge.className = "severity-badge status-not-analyzed";
+                    notAnalyzedBadge.textContent = "NOT ANALYZED";
+
+                    notAnalyzedBadge.setAttribute("data-tooltip", bug.error);
+                    notAnalyzedBadge.setAttribute("aria-label", bug.error);
+
+                    heading.appendChild(notAnalyzedBadge);
                 } else if (isDuplicate) {
                     const duplicateBadge = document.createElement("span");
                     duplicateBadge.className = "severity-badge status-duplicate";
