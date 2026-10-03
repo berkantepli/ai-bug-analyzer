@@ -69,7 +69,7 @@ class ContextTooLargeError(RuntimeError):
 
 
 class OllamaUnavailableError(RuntimeError):
-    """Ollama could not be reached or did not answer in time."""
+    """Ollama could not be reached, did not answer in time or failed itself."""
 
 
 VALIDITY_RULE = """
@@ -338,6 +338,13 @@ def _call_ollama(payload: dict) -> dict:
             raise ContextTooLargeError(
                 "The report and screenshots are too long for the model to "
                 "process. Use fewer screenshots or a shorter text."
+            ) from error
+
+        # A server error means Ollama itself failed (for example the model
+        # runner crashed), not this particular bug report.
+        if error.code >= 500:
+            raise OllamaUnavailableError(
+                f"Ollama returned HTTP {error.code}."
             ) from error
 
         raise RuntimeError(f"Ollama returned HTTP {error.code}.") from error

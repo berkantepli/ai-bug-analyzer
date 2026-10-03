@@ -350,11 +350,9 @@ def test_batch_stops_sending_bugs_once_ollama_is_unavailable(monkeypatch) -> Non
     assert data["stopped_reason"] == (
         "Ollama became unavailable during the batch: Could not connect to Ollama."
     )
-    first, *skipped = data["bugs"]
-    assert first["error"] == (
-        "The LLM could not analyze this bug: Could not connect to Ollama."
-    )
-    assert all("was not analyzed" in bug["error"] for bug in skipped)
+    # The bug that hit the error and the skipped ones look the same; the
+    # Ollama error itself is reported once in stopped_reason.
+    assert [bug["error"] for bug in data["bugs"]] == [bugs.OLLAMA_STOPPED_ERROR] * 3
 
 
 def test_batch_without_ollama_errors_has_no_stopped_reason(monkeypatch) -> None:

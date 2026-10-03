@@ -88,6 +88,14 @@ async def _validate_screenshots(screenshots: list[UploadFile]) -> None:
             )
 
 
+# Shown on every bug that was not analyzed because Ollama failed during the
+# batch; the actual Ollama error is reported once in "stopped_reason".
+OLLAMA_STOPPED_ERROR = (
+    "The LLM could not analyze this bug: Ollama became unavailable during "
+    "this batch, so this bug was not analyzed."
+)
+
+
 # Progress of running batches, keyed by the batch id sent by each client,
 # so batches started from different tabs do not share counters.
 batch_progress: dict[str, dict] = {}
@@ -145,10 +153,7 @@ async def process_batch_record(
             # each one would fail the same way or wait for the full timeout.
             if batch_state["ollama_error"]:
                 progress["failed"] += 1
-                result["error"] = (
-                    "The LLM could not analyze this bug: Ollama became "
-                    "unavailable earlier in this batch, so it was not analyzed."
-                )
+                result["error"] = OLLAMA_STOPPED_ERROR
                 return result
 
             analysis = await analyze_with_llm(bug)
@@ -156,7 +161,7 @@ async def process_batch_record(
     except OllamaUnavailableError as error:
         progress["failed"] += 1
         batch_state["ollama_error"] = batch_state["ollama_error"] or str(error)
-        result["error"] = f"The LLM could not analyze this bug: {error}"
+        result["error"] = OLLAMA_STOPPED_ERROR
         return result
 
     except InvalidBugReportError as error:

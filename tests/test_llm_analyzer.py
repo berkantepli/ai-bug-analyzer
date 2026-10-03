@@ -209,3 +209,15 @@ def test_unreachable_ollama_is_reported_as_unavailable(monkeypatch) -> None:
         llm_analyzer._call_ollama({})
 
     assert str(error.value).startswith("Could not connect to Ollama.")
+
+
+def test_ollama_server_error_is_reported_as_unavailable(monkeypatch) -> None:
+    def crashed(request, timeout):
+        raise HTTPError(request.full_url, 500, "error", {}, BytesIO(b"runner crashed"))
+
+    monkeypatch.setattr(llm_analyzer, "urlopen", crashed)
+
+    with pytest.raises(llm_analyzer.OllamaUnavailableError) as error:
+        llm_analyzer._call_ollama({})
+
+    assert str(error.value) == "Ollama returned HTTP 500."
