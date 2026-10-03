@@ -1,10 +1,11 @@
 from io import BytesIO
 import re
-import string
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
 import xlrd
+
+from app.services.readability import readability_error
 
 
 FIELD_ALIASES = {
@@ -55,33 +56,7 @@ REQUIRED_FIELDS = (
 )
 
 
-READABILITY_FIELDS = (
-    "title",
-    "description",
-    "expected_result",
-    "actual_result",
-)
-
-MIN_READABLE_WORD_RATIO = 0.5
-
 HEADER_SEARCH_ROWS = 20
-
-
-def _is_word(token: str) -> bool:
-    token = token.strip(string.punctuation + "“”‘’")
-    if not token:
-        return False
-    if token.isdigit():
-        return True
-    return token.replace("-", "").replace("'", "").isalpha()
-
-
-def _is_readable(values: dict[str, str]) -> bool:
-    tokens = " ".join(values[field] for field in READABILITY_FIELDS).split()
-    if not tokens:
-        return False
-    words = sum(_is_word(token) for token in tokens)
-    return words / len(tokens) >= MIN_READABLE_WORD_RATIO
 
 
 def _normalize_header(value: object) -> str:
@@ -143,10 +118,8 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
         ]
         if missing_values:
             error = f"Missing required values: {', '.join(missing_values)}."
-        elif not _is_readable(values):
-            error = "The bug report text is unreadable."
         else:
-            error = None
+            error = readability_error(values)
         records.append({"row": row_number, "values": values, "error": error})
 
     if not records:

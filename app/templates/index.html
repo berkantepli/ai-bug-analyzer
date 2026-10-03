@@ -2839,6 +2839,15 @@
             }
 
             if (typeof error === "object") {
+                // FastAPI errors: {"detail": "..."} or a list of {"msg": "..."}
+                if ("detail" in error) {
+                    return formatError(error.detail);
+                }
+
+                if (typeof error.msg === "string") {
+                    return error.msg;
+                }
+
                 try {
                     return JSON.stringify(error, null, 2);
                 } catch {

@@ -8,6 +8,7 @@ import httpx
 from app.api import bugs
 from app.main import app
 from app.schemas.analysis import BugAnalysis
+from app.services.llm_analyzer import InvalidBugReportError
 
 
 client = TestClient(app)
@@ -219,6 +220,35 @@ def test_batch_endpoint_marks_unreadable_rows_as_failed(monkeypatch) -> None:
     unreadable_bug = data["bugs"][0]
     assert unreadable_bug["status"] == "failed"
     assert unreadable_bug["error"] == "The bug report text is unreadable."
+
+
+def test_batch_endpoint_marks_placeholder_and_invalid_reports_as_failed(
+    monkeypatch,
+) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        if bug.title == "Chocolate cake":
+            raise InvalidBugReportError("The text is a cake recipe.")
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            HEADER,
+            ("test", "test test", "1. test", "test", "test"),
+            ("Chocolate cake", "Mix flour and sugar", "1. Bake", "Moist", "Tasty"),
+            ("Logout fails", "Cannot sign out", "1. Logout", "Login page", "Error"),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.status_code == 200
+    placeholder, recipe, valid = response.json()["bugs"]
+    assert placeholder["error"] == "The bug report contains only placeholder text."
+    assert recipe["status"] == "failed"
+    assert recipe["error"] == "Not a valid bug report: The text is a cake recipe."
+    assert valid["status"] == "analyzed"
 
 
 def test_batch_endpoint_finds_header_below_report_title(monkeypatch) -> None:

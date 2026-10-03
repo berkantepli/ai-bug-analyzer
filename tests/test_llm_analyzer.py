@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 
@@ -29,3 +30,91 @@ def test_empty_or_invalid_llm_response_raises(monkeypatch, response) -> None:
 
     with pytest.raises(RuntimeError):
         asyncio.run(llm_analyzer.analyze_with_llm(BUG))
+
+
+ANALYSIS_FIELDS = {
+    "severity": "LOW",
+    "priority": "P4",
+    "category": "General",
+    "impact": "None",
+    "possible_root_cause": "None",
+    "suggested_test_scenarios": [],
+    "missing_information": [],
+    "confidence": 0.1,
+}
+
+
+def llm_message(content: dict) -> dict:
+    return {"message": {"content": json.dumps(content)}}
+
+
+def validity(valid=True, reason="") -> dict:
+    return llm_message({"is_valid_bug_report": valid, "invalid_reason": reason})
+
+
+def fake_ollama(monkeypatch, *responses) -> list[dict]:
+    """Answer successive Ollama calls in order and record their payloads."""
+    payloads = []
+
+    def fake_call_ollama(payload):
+        payloads.append(payload)
+        return responses[len(payloads) - 1]
+
+    monkeypatch.setattr(llm_analyzer, "_call_ollama", fake_call_ollama)
+    return payloads
+
+
+class FakeUpload:
+    def __init__(self, content: bytes) -> None:
+        self.content = content
+
+    async def read(self) -> bytes:
+        return self.content
+
+
+def test_invalid_bug_report_is_rejected_before_analysis(monkeypatch) -> None:
+    payloads = fake_ollama(
+        monkeypatch,
+        validity(valid=False, reason="The text is a cake recipe, not a bug report."),
+    )
+
+    with pytest.raises(llm_analyzer.InvalidBugReportError) as error:
+        asyncio.run(llm_analyzer.analyze_with_llm(BUG))
+
+    assert str(error.value) == "The text is a cake recipe, not a bug report."
+    assert len(payloads) == 1
+
+
+def test_valid_bug_report_is_analyzed_after_validity_check(monkeypatch) -> None:
+    payloads = fake_ollama(monkeypatch, validity(), llm_message(ANALYSIS_FIELDS))
+
+    analysis = asyncio.run(llm_analyzer.analyze_with_llm(BUG))
+
+    validity_call, analysis_call = payloads
+    assert "is_valid_bug_report" in validity_call["format"]["properties"]
+    assert "is_valid_bug_report" not in analysis_call["format"]["properties"]
+    assert analysis.severity == "LOW"
+
+
+def test_screenshot_is_only_sent_with_the_analysis(monkeypatch) -> None:
+    payloads = fake_ollama(
+        monkeypatch,
+        validity(),
+        llm_message(
+            {
+                **ANALYSIS_FIELDS,
+                "confidence": 0.9,
+                "visual_evidence": "The screenshot shows the disabled button.",
+            }
+        ),
+    )
+
+    analysis = asyncio.run(
+        llm_analyzer.analyze_with_llm(BUG, [FakeUpload(b"image-bytes")])
+    )
+
+    validity_call, analysis_call = payloads
+    assert validity_call["messages"][0]["images"] == []
+    assert analysis_call["messages"][0]["images"] != []
+    assert analysis.visual_evidence == "The screenshot shows the disabled button."
+    assert analysis.confidence == 0.9

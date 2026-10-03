@@ -6,12 +6,75 @@ from typing import Optional
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
+from pydantic import BaseModel
+
 from app.config import OLLAMA_MODEL, OLLAMA_URL
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
 
 
 OLLAMA_CHAT_URL = f"{OLLAMA_URL}/api/chat"
+
+
+class ReportValidity(BaseModel):
+    is_valid_bug_report: bool
+    # Required so the model always writes a reason; empty when valid.
+    invalid_reason: str
+
+
+class InvalidBugReportError(Exception):
+    """The LLM judged the input not to be a meaningful bug report."""
+
+
+VALIDITY_RULE = """
+Decide whether the written text is a genuine software bug report.
+Set is_valid_bug_report to false ONLY when the text is:
+- random characters or keyboard mashing
+- placeholder text such as "test" or "lorem ipsum"
+- made of real words that do not form a meaningful description
+- unrelated to software behavior (for example a recipe or a story)
+
+Short, vague or incomplete reports about software are VALID.
+For example a report titled "Bug" saying "It does not work" is valid.
+
+When is_valid_bug_report is false, invalid_reason must be one short
+English sentence explaining what is wrong with the input, for example
+"The text describes a cake recipe, not software behavior."
+When is_valid_bug_report is true, invalid_reason must be an empty string.
+""".strip()
+
+
+def _report_text(bug: BugReportCreate) -> str:
+    return f"""
+Bug Title:
+{bug.title}
+
+Description:
+{bug.description}
+
+Steps to Reproduce:
+{chr(10).join(bug.steps_to_reproduce)}
+
+Expected Result:
+{bug.expected_result}
+
+Actual Result:
+{bug.actual_result}
+""".strip()
+
+
+def build_validity_prompt(bug: BugReportCreate) -> str:
+    return f"""
+You are an experienced Software QA Engineer reviewing a bug report.
+
+Return ONLY valid JSON with exactly these fields:
+- is_valid_bug_report
+- invalid_reason
+
+{_report_text(bug)}
+
+{VALIDITY_RULE}
+""".strip()
 
 
 def build_prompt(bug: BugReportCreate, has_screenshot: bool) -> str:
@@ -65,20 +128,7 @@ Do not return:
 - Reasoning
 - Thinking process
 
-Bug Title:
-{bug.title}
-
-Description:
-{bug.description}
-
-Steps to Reproduce:
-{chr(10).join(bug.steps_to_reproduce)}
-
-Expected Result:
-{bug.expected_result}
-
-Actual Result:
-{bug.actual_result}
+{_report_text(bug)}
 
 Your analysis must contain exactly these fields:
 
@@ -212,27 +262,7 @@ def _call_ollama(payload: dict) -> dict:
         raise RuntimeError("Ollama returned an invalid JSON response.") from error
 
 
-async def analyze_with_llm(
-    bug: BugReportCreate,
-    screenshots: Optional[list] = None,
-) -> BugAnalysis:
-    screenshots = screenshots or []
-
-    images = []
-
-    for screenshot in screenshots:
-        image_bytes = await screenshot.read()
-
-        if not image_bytes:
-            continue
-
-        images.append(base64.b64encode(image_bytes).decode("utf-8"))
-
-    prompt = build_prompt(
-        bug,
-        has_screenshot=bool(images),
-    )
-
+async def _request_json(prompt: str, images: list[str], schema: type) -> dict:
     payload = {
         "model": OLLAMA_MODEL,
         "messages": [
@@ -243,7 +273,7 @@ async def analyze_with_llm(
             }
         ],
         "stream": False,
-        "format": BugAnalysis.model_json_schema(),
+        "format": schema.model_json_schema(),
         "options": {
             "temperature": 0.1,
         },
@@ -270,15 +300,53 @@ async def analyze_with_llm(
         ) from error
 
     try:
-        analysis_data = json.loads(content)
+        return json.loads(content)
 
     except json.JSONDecodeError as error:
         raise RuntimeError("The LLM returned invalid JSON.") from error
 
+
+def _validate(schema: type, data: dict):
     try:
-        return BugAnalysis.model_validate(analysis_data)
+        return schema.model_validate(data)
 
     except Exception as error:
         raise RuntimeError(
-            f"LLM response failed BugAnalysis validation: {error}"
+            f"LLM response failed {schema.__name__} validation: {error}"
         ) from error
+
+
+def _raise_if_invalid(validity: ReportValidity) -> None:
+    if not validity.is_valid_bug_report:
+        raise InvalidBugReportError(
+            validity.invalid_reason or "The input is not a meaningful bug report."
+        )
+
+
+async def analyze_with_llm(
+    bug: BugReportCreate,
+    screenshots: Optional[list] = None,
+) -> BugAnalysis:
+    screenshots = screenshots or []
+
+    images = []
+
+    for screenshot in screenshots:
+        image_bytes = await screenshot.read()
+
+        if not image_bytes:
+            continue
+
+        images.append(base64.b64encode(image_bytes).decode("utf-8"))
+
+    # Judge the written report on its own first, so a screenshot of another
+    # page cannot reject a valid report.
+    validity = _validate(
+        ReportValidity,
+        await _request_json(build_validity_prompt(bug), [], ReportValidity),
+    )
+    _raise_if_invalid(validity)
+
+    prompt = build_prompt(bug, has_screenshot=bool(images))
+
+    return _validate(BugAnalysis, await _request_json(prompt, images, BugAnalysis))

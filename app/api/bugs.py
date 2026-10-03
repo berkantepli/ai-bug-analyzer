@@ -6,8 +6,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
 
-from app.services.llm_analyzer import analyze_with_llm
+from app.services.llm_analyzer import InvalidBugReportError, analyze_with_llm
 from app.services.batch_analyzer import parse_bug_spreadsheet
+from app.services.readability import readability_error
 
 import asyncio
 
@@ -74,6 +75,11 @@ async def process_batch_record(
         async with semaphore:
             analysis = await analyze_with_llm(bug)
 
+    except InvalidBugReportError as error:
+        progress["failed"] += 1
+        result["error"] = f"Not a valid bug report: {error}"
+        return result
+
     except Exception as error:
         progress["failed"] += 1
         result["error"] = f"The LLM could not analyze this bug: {error}"
@@ -106,6 +112,17 @@ async def analyze_bug(
     actual_result: str = Form(...),
     screenshots: list[UploadFile] = File(default=[]),
 ):
+    values = {
+        "title": title,
+        "description": description,
+        "steps_to_reproduce": steps_to_reproduce,
+        "expected_result": expected_result,
+        "actual_result": actual_result,
+    }
+    error = readability_error(values)
+    if error:
+        raise HTTPException(status_code=422, detail=error)
+
     bug = BugReportCreate(
         title=title,
         description=description,
@@ -116,10 +133,15 @@ async def analyze_bug(
         actual_result=actual_result,
     )
 
-    return await analyze_with_llm(
-        bug,
-        screenshots,
-    )
+    try:
+        return await analyze_with_llm(
+            bug,
+            screenshots,
+        )
+    except InvalidBugReportError as error:
+        raise HTTPException(
+            status_code=422, detail=f"Not a valid bug report: {error}"
+        ) from error
 
 
 @router.post("/batch")
