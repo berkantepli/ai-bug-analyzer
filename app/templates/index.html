@@ -2507,8 +2507,27 @@
                 `${Math.round(percentage)}%`;
         }
 
-        async function fetchBatchProgress() {
-            const response = await fetch("/bugs/batch/progress");
+        // Each batch gets its own id so tabs running batches at the same
+        // time only see their own progress.
+        function createBatchId() {
+            if (window.crypto && typeof window.crypto.randomUUID === "function") {
+                return window.crypto.randomUUID();
+            }
+
+            return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+        }
+
+        async function fetchBatchProgress(batchId) {
+            const response = await fetch(
+                `/bugs/batch/${encodeURIComponent(batchId)}/progress`
+            );
+
+            // The batch is not registered yet (upload still running) or
+            // has already finished.
+            if (!response.ok) {
+                return null;
+            }
+
             return response.json();
         }
 
@@ -2525,15 +2544,14 @@
             }
         }
 
-        function startBatchProgressPolling() {
+        function startBatchProgressPolling(batchId) {
             stopBatchProgressPolling();
 
             batchProgressInterval = setInterval(async () => {
                 try {
-                    const progress = await fetchBatchProgress();
+                    const progress = await fetchBatchProgress(batchId);
 
-                    if (progress.status !== "processing") {
-                        stopBatchProgressPolling();
+                    if (!progress || progress.status !== "processing") {
                         return;
                     }
 
@@ -2553,13 +2571,7 @@
             stopBatchProgressPolling();
 
             const total = data.total;
-            let processed = total;
-
-            try {
-                processed = liveProcessedCount(await fetchBatchProgress());
-            } catch (error) {
-                console.error("Progress update failed:", error);
-            }
+            let processed = total - (data.rejected || 0);
 
             const remaining = total - processed;
             const stepDelay = Math.min(1750, 15000 / Math.max(remaining, 1));
@@ -2576,9 +2588,11 @@
             const file = batchFileInput.files[0];
             if (!file) return;
 
+            const batchId = createBatchId();
+
             clearResults();
             startBatchTimer();
-            startBatchProgressPolling();
+            startBatchProgressPolling(batchId);
 
             batchAnalyzeButton.disabled = true;
             batchAnalyzeButton.innerHTML = `
@@ -2588,6 +2602,7 @@
             try {
                 const formData = new FormData();
                 formData.append("file", file);
+                formData.append("batch_id", batchId);
                 const response = await fetch("/bugs/batch", { method: "POST", body: formData });
                 let data;
                 try {

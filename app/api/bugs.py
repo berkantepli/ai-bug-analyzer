@@ -1,4 +1,7 @@
-from fastapi import APIRouter, File, Form, UploadFile
+from typing import Optional
+from uuid import uuid4
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
@@ -23,23 +26,23 @@ def calculate_worker_count(bug_count: int) -> int:
         return 4
 
 
-batch_progress = {
-    "status": "idle",
-    "total": 0,
-    "completed": 0,
-    "failed": 0,
-    "rejected": 0,
-}
+# Progress of running batches, keyed by the batch id sent by each client,
+# so batches started from different tabs do not share counters.
+batch_progress: dict[str, dict] = {}
 
 
-@router.get("/batch/progress")
-def get_batch_progress():
-    return batch_progress
+@router.get("/batch/{batch_id}/progress")
+def get_batch_progress(batch_id: str):
+    progress = batch_progress.get(batch_id)
+    if progress is None:
+        raise HTTPException(status_code=404, detail="Batch not found.")
+    return progress
 
 
 async def process_batch_record(
     record: dict,
     semaphore: asyncio.Semaphore,
+    progress: dict,
 ) -> dict:
     values = record["values"]
     result = {
@@ -72,11 +75,11 @@ async def process_batch_record(
             analysis = await analyze_with_llm(bug)
 
     except Exception as error:
-        batch_progress["failed"] += 1
+        progress["failed"] += 1
         result["error"] = f"The LLM could not analyze this bug: {error}"
         return result
 
-    batch_progress["completed"] += 1
+    progress["completed"] += 1
 
     analysis = analysis.model_dump()
 
@@ -120,34 +123,59 @@ async def analyze_bug(
 
 
 @router.post("/batch")
-async def analyze_bug_batch(file: UploadFile = File(...)):
-    records = await parse_bug_spreadsheet(file)
+async def analyze_bug_batch(
+    file: UploadFile = File(...),
+    batch_id: Optional[str] = Form(None),
+):
+    batch_id = batch_id or uuid4().hex
+    if batch_id in batch_progress:
+        raise HTTPException(status_code=409, detail="Batch is already running.")
 
-    rejected = sum(1 for record in records if record["error"])
-
-    batch_progress["status"] = "processing"
-    batch_progress["total"] = len(records)
-    batch_progress["completed"] = 0
-    batch_progress["failed"] = rejected
-    batch_progress["rejected"] = rejected
-
-    total = len(records)
-    worker_count = calculate_worker_count(total)
-
-    semaphore = asyncio.Semaphore(worker_count)
-
-    results = await asyncio.gather(
-        *(process_batch_record(record, semaphore) for record in records)
-    )
-
-    failed = sum(result["status"] == "failed" for result in results)
-
-    batch_progress["status"] = "completed"
-
-    return {
-        "total": total,
-        "completed": total - failed,
-        "failed": failed,
-        "workers": worker_count,
-        "bugs": results,
+    progress = {
+        "status": "reading",
+        "total": 0,
+        "completed": 0,
+        "failed": 0,
+        "rejected": 0,
     }
+    batch_progress[batch_id] = progress
+
+    try:
+        records = await parse_bug_spreadsheet(file)
+
+        rejected = sum(1 for record in records if record["error"])
+        total = len(records)
+
+        progress.update(
+            status="processing",
+            total=total,
+            failed=rejected,
+            rejected=rejected,
+        )
+
+        worker_count = calculate_worker_count(total)
+
+        semaphore = asyncio.Semaphore(worker_count)
+
+        results = await asyncio.gather(
+            *(
+                process_batch_record(record, semaphore, progress)
+                for record in records
+            )
+        )
+
+        failed = sum(result["status"] == "failed" for result in results)
+
+        progress["status"] = "completed"
+
+        return {
+            "batch_id": batch_id,
+            "total": total,
+            "completed": total - failed,
+            "failed": failed,
+            "rejected": rejected,
+            "workers": worker_count,
+            "bugs": results,
+        }
+    finally:
+        batch_progress.pop(batch_id, None)
