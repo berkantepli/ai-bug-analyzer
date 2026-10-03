@@ -21,6 +21,8 @@ Enter a title, description, steps to reproduce, expected result, actual result a
 
 If a screenshot shows a different page than the report describes, the report is still analyzed. The mismatch is explained in Visual Evidence and confidence is capped at 0.6.
 
+Up to 5 screenshots of at most 10 MB each can be attached, in PNG, JPEG, WEBP, GIF or BMP format.
+
 ### Report language
 
 The analysis is written in the language of the report (for example English, Turkish or German). Quoted UI text such as button labels or error messages does not change the detected language. Severity, priority and category always stay in English so results can be grouped across reports.
@@ -56,6 +58,7 @@ The page shows whether the analysis service is available. A diagnosis view check
 ## Excel format
 
 - The file must contain **a single sheet**; only the active sheet is read.
+- Limits: at most **5 MB**, **2000 rows** in the sheet and **500 bug records**.
 - The header row may be anywhere in the **first 20 rows**, so report titles or notes can sit above it.
 - Header names are case- and punctuation-insensitive and must be in English:
 
@@ -187,6 +190,18 @@ The tests mock the LLM, so Ollama does not need to be running.
 
 ---
 
+## Security
+
+The app is built to run **locally for a single user**:
+
+- It has **no authentication**. Keep the default host (`127.0.0.1`) and do not start it with `--host 0.0.0.0` on a shared network; anyone who can reach it could use your LLM.
+- Requests from other websites to the analysis endpoints are rejected, so a page open in your browser cannot start analyses in the background.
+- Uploads are limited in size and type, and Excel files are parsed with `defusedxml` to block XML bombs.
+- Text from Ollama and the model is escaped before it is shown in the page.
+- Bug reports can contain instructions aimed at the model (prompt injection). The prompts tell the model to ignore them, but analysis of reports written by others should not be trusted blindly.
+
+---
+
 ## Limitations
 
 - Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, and a batch is processed bug by bug.
@@ -201,7 +216,6 @@ The tests mock the LLM, so Ollama does not need to be running.
 - Jira and test management (Xray) integration
 - Persistent analysis history and report export
 - Clearer errors when Ollama is unavailable during single bug analysis
-- File size and row count limits for batch uploads
 
 ---
 
