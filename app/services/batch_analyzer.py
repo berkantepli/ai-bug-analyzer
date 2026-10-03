@@ -142,6 +142,24 @@ def _find_header(rows: list[tuple[object, ...]]) -> tuple[int, dict[str, int]]:
     return best_row_index, best_indexes
 
 
+def build_record(row_number: int, values: dict[str, str]) -> dict:
+    """Validate one bug's values; rows with an error are not sent to the LLM."""
+    missing_values = [
+        field.replace("_", " ")
+        for field in REQUIRED_FIELDS
+        if not values.get(field, "").strip()
+    ]
+    if missing_values:
+        error = f"Missing required values: {', '.join(missing_values)}."
+    else:
+        error = (
+            field_length_error(values)
+            or readability_error(values)
+            or identical_fields_error(values)
+        )
+    return {"row": row_number, "values": values, "error": error, "duplicate_of": None}
+
+
 def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
     if not rows:
         raise HTTPException(status_code=422, detail="The Excel file is empty.")
@@ -167,20 +185,7 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
         }
         if not any(values.values()):
             continue
-        missing_values = [
-            field.replace("_", " ") for field in REQUIRED_FIELDS if not values[field]
-        ]
-        if missing_values:
-            error = f"Missing required values: {', '.join(missing_values)}."
-        else:
-            error = (
-                field_length_error(values)
-                or readability_error(values)
-                or identical_fields_error(values)
-            )
-        records.append(
-            {"row": row_number, "values": values, "error": error, "duplicate_of": None}
-        )
+        records.append(build_record(row_number, values))
 
     if not records:
         raise HTTPException(

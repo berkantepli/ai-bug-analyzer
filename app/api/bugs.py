@@ -1,7 +1,8 @@
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
@@ -12,7 +13,11 @@ from app.services.llm_analyzer import (
     OllamaUnavailableError,
     analyze_with_llm,
 )
-from app.services.batch_analyzer import parse_bug_spreadsheet
+from app.services.batch_analyzer import (
+    MAX_BUG_RECORDS,
+    build_record,
+    parse_bug_spreadsheet,
+)
 from app.services.readability import (
     field_length_error,
     identical_fields_error,
@@ -141,7 +146,7 @@ async def process_batch_record(
     result = {
         "row": record["row"],
         "status": "failed",
-        "title": values["title"],
+        "title": values.get("title", ""),
         "bug": values,
         "analysis": None,
         "error": record["error"],
@@ -277,11 +282,11 @@ async def analyze_bug(
         ) from error
 
 
-@router.post("/batch")
-async def analyze_bug_batch(
-    file: UploadFile = File(...),
-    batch_id: Optional[str] = Form(None),
-):
+async def _run_batch(
+    batch_id: Optional[str],
+    load_records: Callable[[], Awaitable[list[dict]]],
+) -> dict:
+    """Analyze records with live progress; shared by batch and retry."""
     batch_id = batch_id or uuid4().hex
     if batch_id in batch_progress:
         raise HTTPException(status_code=409, detail="Batch is already running.")
@@ -298,7 +303,7 @@ async def analyze_bug_batch(
     batch_progress[batch_id] = progress
 
     try:
-        records = await parse_bug_spreadsheet(file)
+        records = await load_records()
 
         rejected = sum(1 for record in records if record["error"])
         duplicates = sum(1 for record in records if record["duplicate_of"])
@@ -350,3 +355,35 @@ async def analyze_bug_batch(
         }
     finally:
         batch_progress.pop(batch_id, None)
+
+
+@router.post("/batch")
+async def analyze_bug_batch(
+    file: UploadFile = File(...),
+    batch_id: Optional[str] = Form(None),
+):
+    return await _run_batch(batch_id, lambda: parse_bug_spreadsheet(file))
+
+
+class RetryBug(BaseModel):
+    row: int
+    bug: dict[str, str]
+
+
+class RetryRequest(BaseModel):
+    batch_id: Optional[str] = None
+    bugs: list[RetryBug] = Field(min_length=1, max_length=MAX_BUG_RECORDS)
+
+
+@router.post("/batch/retry")
+async def retry_bug_batch(request: RetryRequest):
+    """Analyze bugs again, typically those not analyzed when Ollama stopped.
+
+    The values come from an earlier batch response, so the Excel file does
+    not have to be uploaded again. They are validated like Excel rows.
+    """
+
+    async def load_records() -> list[dict]:
+        return [build_record(item.row, item.bug) for item in request.bugs]
+
+    return await _run_batch(request.batch_id, load_records)

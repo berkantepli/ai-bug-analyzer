@@ -387,6 +387,50 @@ def test_running_analyses_are_released_when_ollama_fails(monkeypatch) -> None:
     assert [bug["status"] for bug in response.json()["bugs"]] == ["not_analyzed"] * 3
 
 
+def test_retry_analyzes_the_given_bugs(monkeypatch) -> None:
+    analyzed_rows = []
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        analyzed_rows.append(bug.title)
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    login = {
+        "title": "Login fails",
+        "description": "Cannot sign in",
+        "steps_to_reproduce": "1. Login",
+        "expected_result": "Dashboard",
+        "actual_result": "Error",
+    }
+
+    response = client.post(
+        "/bugs/batch/retry",
+        json={
+            "batch_id": "retry-1",
+            "bugs": [
+                {"row": 7, "bug": login},
+                {"row": 9, "bug": {**login, "title": "", "description": ""}},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["batch_id"] == "retry-1"
+    assert analyzed_rows == ["Login fails"]
+    analyzed, invalid = data["bugs"]
+    assert (analyzed["row"], analyzed["status"]) == (7, "analyzed")
+    assert (invalid["row"], invalid["status"]) == (9, "failed")
+    assert invalid["error"] == "Missing required values: title, description."
+
+
+def test_retry_requires_at_least_one_bug() -> None:
+    response = client.post("/bugs/batch/retry", json={"bugs": []})
+
+    assert response.status_code == 422
+
+
 def test_batch_without_ollama_errors_has_no_stopped_reason(monkeypatch) -> None:
     async def fake_analyze_with_llm(bug, screenshots=None):
         return FAKE_ANALYSIS

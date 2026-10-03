@@ -47,6 +47,7 @@ Upload an `.xlsx` or `.xls` file to analyze many bugs at once.
 
 - **Never stops on a bad row.** Rows with missing values, unusable text or LLM errors are shown as **FAILED** with the reason, and the remaining bugs are still analyzed.
 - **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
+- **Stops when Ollama goes away.** If Ollama becomes unreachable, the remaining bugs are marked **NOT ANALYZED** instead of each waiting for a timeout, and a **Retry not analyzed bugs** button analyzes only those once Ollama is back.
 - **Live progress** with elapsed time. Each browser tab tracks its own batch, so several batches can run at the same time.
 - **Summary** of analyzed, failed and duplicate bugs, with severity, priority and category counts.
 
@@ -142,6 +143,7 @@ tests/                       # pytest suite (the LLM is mocked)
 |---|---|---|
 | `POST` | `/bugs/analyze` | Analyze one bug (form fields + optional `screenshots`) |
 | `POST` | `/bugs/batch` | Analyze an Excel file (`file`, optional `batch_id`) |
+| `POST` | `/bugs/batch/retry` | Analyze bugs again from an earlier batch result (JSON) |
 | `GET` | `/bugs/batch/{batch_id}/progress` | Progress of a running batch |
 | `GET` | `/health` | Application health |
 | `GET` | `/health/analysis` | Whether the analysis service is available |

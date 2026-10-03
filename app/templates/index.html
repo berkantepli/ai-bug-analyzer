@@ -704,6 +704,24 @@
             color: var(--critical-text);
         }
 
+        .batch-retry-button {
+            margin-top: 12px;
+            padding: 8px 14px;
+            border: 1px solid var(--critical-border);
+            border-radius: 8px;
+            background: var(--card);
+            color: var(--text);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .batch-retry-button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
         .summary-panel {
             grid-column: 1 / -1;
             border: 1px solid var(--border);
@@ -2141,6 +2159,11 @@
             analyzeButton.disabled = !serviceUsable || singleAnalysisRunning;
             batchAnalyzeButton.disabled =
                 !serviceUsable || batchAnalysisRunning || !batchFileInput.files[0];
+
+            const retryButton = document.getElementById("batchRetryButton");
+            if (retryButton) {
+                retryButton.disabled = !serviceUsable || batchAnalysisRunning;
+            }
         }
 
         async function getAnalysisDiagnosisData() {
@@ -2663,6 +2686,86 @@
             renderBatchProgress({ processed: total, total, done: true });
         }
 
+        // Result of the last batch; a retry updates it in place.
+        let currentBatchData = null;
+
+        // Sends only the bugs that were not analyzed because Ollama stopped,
+        // using the values from the last result, and merges the new results
+        // into it by Excel row.
+        async function retryNotAnalyzedBugs() {
+            const data = currentBatchData;
+            const bugsToRetry = data
+                ? data.bugs.filter(bug => bug.status === "not_analyzed")
+                : [];
+
+            if (!bugsToRetry.length) {
+                return;
+            }
+
+            const batchId = createBatchId();
+            const retryButton = document.getElementById("batchRetryButton");
+
+            batchAnalysisRunning = true;
+            refreshAnalyzeButtons();
+            runningAnalyses += 1;
+            retryButton.textContent = "Retrying...";
+
+            startBatchTimer();
+            startBatchProgressPolling(batchId);
+
+            try {
+                const response = await fetch("/bugs/batch/retry", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        batch_id: batchId,
+                        bugs: bugsToRetry.map(bug => ({ row: bug.row, bug: bug.bug }))
+                    })
+                });
+                const retryData = await response.json();
+
+                if (!response.ok) {
+                    throw retryData;
+                }
+
+                await finishBatchProgress(retryData);
+
+                const retriedByRow = new Map(retryData.bugs.map(bug => [bug.row, bug]));
+                currentBatchData = {
+                    ...data,
+                    stopped_reason: retryData.stopped_reason,
+                    bugs: data.bugs.map(bug => retriedByRow.get(bug.row) || bug)
+                };
+
+                renderBatchResults(currentBatchData);
+                document.getElementById("batchProgress").hidden = false;
+
+                if (retryData.bugs.some(bug => (bug.error || "").startsWith(LLM_ERROR_PREFIX))) {
+                    checkServiceStatus();
+                }
+            } catch (error) {
+                stopBatchProgressPolling();
+                stopBatchTimer();
+                stopAnalyzingDots();
+
+                const noticeText = document.querySelector(
+                    ".batch-stopped-notice .result-value"
+                );
+                if (noticeText) {
+                    noticeText.textContent = `Retry failed: ${formatError(error)}`;
+                }
+            } finally {
+                runningAnalyses -= 1;
+                batchAnalysisRunning = false;
+
+                const button = document.getElementById("batchRetryButton");
+                if (button) {
+                    button.textContent = "Retry not analyzed bugs";
+                }
+                refreshAnalyzeButtons();
+            }
+        }
+
         batchAnalyzeButton.addEventListener("click", async () => {
             const file = batchFileInput.files[0];
             if (!file) return;
@@ -2693,6 +2796,7 @@
                 }
                 if (!response.ok) throw data;
                 await finishBatchProgress(data);
+                currentBatchData = data;
                 renderBatchResults(data);
                 document.getElementById("batchProgress").hidden = false;
 
@@ -3280,7 +3384,19 @@
                     `${data.stopped_reason} The remaining bugs were not analyzed.`;
 
                 notice.append(noticeLabel, noticeText);
+
+                if (data.bugs.some(bug => bug.status === "not_analyzed")) {
+                    const retryButton = document.createElement("button");
+                    retryButton.id = "batchRetryButton";
+                    retryButton.type = "button";
+                    retryButton.className = "batch-retry-button";
+                    retryButton.textContent = "Retry not analyzed bugs";
+                    retryButton.addEventListener("click", retryNotAnalyzedBugs);
+                    notice.appendChild(retryButton);
+                }
+
                 resultGrid.appendChild(notice);
+                refreshAnalyzeButtons();
             }
             const labels = {
                 confidence: "Confidence",
