@@ -53,7 +53,7 @@ Upload an `.xlsx` or `.xls` file to analyze many bugs at once.
 
 ### Service diagnosis
 
-The page shows whether the analysis service is available. A diagnosis view checks Ollama, the required model and a real inference call, and suggests a fix for each failing step.
+The page shows whether the analysis service is available and keeps it up to date: it notices when Ollama stops and switches back to available on its own when Ollama returns. A diagnosis view checks Ollama, the required model and a real inference call, and suggests a fix for each failing step.
 
 ---
 
@@ -146,6 +146,7 @@ tests/                       # pytest suite (the LLM is mocked)
 | `POST` | `/bugs/batch/retry` | Analyze bugs again from an earlier batch result (JSON) |
 | `GET` | `/bugs/batch/{batch_id}/progress` | Progress of a running batch |
 | `GET` | `/health` | Application health |
+| `GET` | `/health/ollama` | Light check that Ollama and the model are available (no inference) |
 | `GET` | `/health/analysis` | Whether the analysis service is available |
 | `GET` | `/health/analysis/diagnose` | Step-by-step diagnosis with suggested fixes |
 

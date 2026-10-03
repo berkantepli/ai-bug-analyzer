@@ -238,6 +238,21 @@ def is_available(*results: dict) -> bool:
     return all(result["status"] == "available" for result in results)
 
 
+@router.get("/ollama")
+def ollama_health() -> dict:
+    """
+    Light check that Ollama is reachable and the model is installed.
+
+    It sends no inference request, so the page can call it regularly to
+    notice when Ollama stops.
+    """
+
+    ollama = check_ollama()
+    model = check_model(ollama)
+
+    return {"available": is_available(ollama, model)}
+
+
 @router.get("/analysis")
 def analysis_health() -> dict:
     """

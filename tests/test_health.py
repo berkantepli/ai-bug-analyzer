@@ -118,3 +118,28 @@ def test_running_analysis_counter_is_reset_after_errors(monkeypatch) -> None:
 
     assert states == [True]
     assert llm_analyzer.is_analyzing() is False
+
+
+def test_light_ollama_check_sends_no_inference_request(monkeypatch) -> None:
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append(request.full_url)
+        body = {"models": [{"name": OLLAMA_MODEL}]}
+        return FakeResponse(json.dumps(body).encode())
+
+    monkeypatch.setattr(health, "urlopen", fake_urlopen)
+
+    response = client.get("/health/ollama")
+
+    assert response.json() == {"available": True}
+    assert requests == [health.OLLAMA_TAGS_URL]
+
+
+def test_light_ollama_check_reports_unreachable_ollama(monkeypatch) -> None:
+    def unreachable(request, timeout):
+        raise URLError("connection refused")
+
+    monkeypatch.setattr(health, "urlopen", unreachable)
+
+    assert client.get("/health/ollama").json() == {"available": False}

@@ -4027,9 +4027,14 @@
             scheduleServiceRecheck();
         }
 
-        // While the service is unavailable, check again every few seconds so
-        // the status recovers on its own when Ollama comes back.
+        // The status is checked again in the background so it follows Ollama:
+        // - unavailable: a full check every 10 seconds, so it recovers on its
+        //   own when Ollama comes back;
+        // - available: a light check every 30 seconds (no inference), so it
+        //   notices when Ollama stops.
+        // Checks pause while the tab is hidden and run when it becomes visible.
         const SERVICE_RECHECK_INTERVAL_MS = 10000;
+        const SERVICE_LIGHT_CHECK_INTERVAL_MS = 30000;
         let serviceRecheckTimer = null;
         let serviceRecheckRunning = false;
 
@@ -4037,30 +4042,50 @@
             clearTimeout(serviceRecheckTimer);
             serviceRecheckTimer = null;
 
-            if (serviceStatus === "unavailable") {
-                serviceRecheckTimer = setTimeout(
-                    recheckUnavailableService,
-                    SERVICE_RECHECK_INTERVAL_MS
-                );
+            if (serviceStatus === "checking") {
+                return;
+            }
+
+            serviceRecheckTimer = setTimeout(
+                recheckService,
+                serviceStatus === "unavailable"
+                    ? SERVICE_RECHECK_INTERVAL_MS
+                    : SERVICE_LIGHT_CHECK_INTERVAL_MS
+            );
+        }
+
+        async function isOllamaReachable() {
+            try {
+                const response = await fetch("/health/ollama", { cache: "no-store" });
+                const data = await response.json();
+                return response.ok && data.available === true;
+            } catch {
+                return false;
             }
         }
 
-        async function recheckUnavailableService() {
+        async function recheckService() {
             clearTimeout(serviceRecheckTimer);
             serviceRecheckTimer = null;
 
-            // A hidden tab is checked again when it becomes visible.
-            if (
-                serviceStatus !== "unavailable" ||
-                document.hidden ||
-                serviceRecheckRunning
-            ) {
+            if (serviceStatus === "checking" || document.hidden || serviceRecheckRunning) {
                 return;
             }
 
             serviceRecheckRunning = true;
 
             try {
+                if (serviceStatus === "available") {
+                    if (await isOllamaReachable()) {
+                        scheduleServiceRecheck();
+                    } else {
+                        // Run the full check so the reason is ready in the
+                        // diagnosis window.
+                        await checkServiceStatus();
+                    }
+                    return;
+                }
+
                 const data = await checkAnalysisHealth();
 
                 if (!data.available) {
@@ -4076,8 +4101,8 @@
         }
 
         document.addEventListener("visibilitychange", () => {
-            if (!document.hidden && serviceStatus === "unavailable") {
-                recheckUnavailableService();
+            if (!document.hidden) {
+                recheckService();
             }
         });
 
