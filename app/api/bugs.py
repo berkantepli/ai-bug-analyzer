@@ -27,6 +27,58 @@ def calculate_worker_count(bug_count: int) -> int:
         return 4
 
 
+MAX_SCREENSHOTS = 5
+MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024
+
+# Image formats the vision model accepts, recognized by their first bytes
+# rather than by the file name.
+IMAGE_SIGNATURES = (
+    b"\x89PNG\r\n\x1a\n",  # PNG
+    b"\xff\xd8\xff",  # JPEG
+    b"GIF87a",
+    b"GIF89a",
+    b"BM",  # BMP
+)
+
+
+def _is_supported_image(data: bytes) -> bool:
+    is_webp = data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    return is_webp or data.startswith(IMAGE_SIGNATURES)
+
+
+async def _validate_screenshots(screenshots: list[UploadFile]) -> None:
+    if len(screenshots) > MAX_SCREENSHOTS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"At most {MAX_SCREENSHOTS} screenshots can be uploaded.",
+        )
+
+    for screenshot in screenshots:
+        data = await screenshot.read(MAX_SCREENSHOT_BYTES + 1)
+        await screenshot.seek(0)
+
+        if not data:
+            continue
+
+        name = screenshot.filename or "screenshot"
+        if len(data) > MAX_SCREENSHOT_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Screenshot '{name}' is larger than "
+                    f"{MAX_SCREENSHOT_BYTES // (1024 * 1024)} MB."
+                ),
+            )
+        if not _is_supported_image(data):
+            raise HTTPException(
+                status_code=415,
+                detail=(
+                    f"Screenshot '{name}' is not a supported image "
+                    "(PNG, JPEG, WEBP, GIF or BMP)."
+                ),
+            )
+
+
 # Progress of running batches, keyed by the batch id sent by each client,
 # so batches started from different tabs do not share counters.
 batch_progress: dict[str, dict] = {}
@@ -128,6 +180,8 @@ async def analyze_bug(
     error = readability_error(values) or identical_fields_error(values)
     if error:
         raise HTTPException(status_code=422, detail=error)
+
+    await _validate_screenshots(screenshots)
 
     bug = BugReportCreate(
         title=title,

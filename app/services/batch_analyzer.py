@@ -1,5 +1,6 @@
 from datetime import date, datetime, time
 from io import BytesIO
+from itertools import islice
 import re
 
 from fastapi import HTTPException, UploadFile
@@ -62,6 +63,12 @@ REQUIRED_FIELDS = (
 
 
 HEADER_SEARCH_ROWS = 20
+
+# Upload limits that keep a single batch from exhausting memory or keeping
+# the LLM busy for hours.
+MAX_EXCEL_BYTES = 5 * 1024 * 1024
+MAX_SHEET_ROWS = 2000
+MAX_BUG_RECORDS = 500
 
 
 def _format_number(value: float) -> str:
@@ -175,6 +182,15 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
             status_code=422, detail="The Excel file contains no bug records."
         )
 
+    if len(records) > MAX_BUG_RECORDS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"The Excel file contains {len(records)} bug records; "
+                f"the maximum is {MAX_BUG_RECORDS}."
+            ),
+        )
+
     _mark_duplicates(records)
     return records
 
@@ -196,7 +212,17 @@ def _mark_duplicates(records: list[dict]) -> None:
 
 async def parse_bug_spreadsheet(file: UploadFile) -> list[dict]:
     filename = (file.filename or "").lower()
-    content = await file.read()
+    content = await file.read(MAX_EXCEL_BYTES + 1)
+    if len(content) > MAX_EXCEL_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"The Excel file is larger than {MAX_EXCEL_BYTES // (1024 * 1024)} MB.",
+        )
+
+    too_many_rows = HTTPException(
+        status_code=422,
+        detail=f"The Excel sheet has more than {MAX_SHEET_ROWS} rows.",
+    )
     try:
         if filename.endswith(".xlsx"):
             workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
@@ -206,13 +232,19 @@ async def parse_bug_spreadsheet(file: UploadFile) -> list[dict]:
                         _format_cell(cell.value, cell.number_format or "General")
                         for cell in row
                     )
-                    for row in workbook.active.iter_rows(min_row=1)
+                    for row in islice(
+                        workbook.active.iter_rows(min_row=1), MAX_SHEET_ROWS + 1
+                    )
                 ]
             finally:
                 workbook.close()
+            if len(rows) > MAX_SHEET_ROWS:
+                raise too_many_rows
         elif filename.endswith(".xls"):
             workbook = xlrd.open_workbook(file_contents=content, formatting_info=True)
             sheet = workbook.sheet_by_index(0)
+            if sheet.nrows > MAX_SHEET_ROWS:
+                raise too_many_rows
             rows = [
                 tuple(_xls_cell_value(workbook, cell) for cell in sheet.row(index))
                 for index in range(sheet.nrows)
