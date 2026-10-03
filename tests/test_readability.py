@@ -3,6 +3,7 @@ import pytest
 from app.services.readability import (
     PLACEHOLDER_TEXT_ERROR,
     UNREADABLE_TEXT_ERROR,
+    identical_fields_error,
     readability_error,
 )
 
@@ -83,3 +84,37 @@ def test_gibberish_is_unreadable(values) -> None:
 )
 def test_placeholder_text_is_rejected(values) -> None:
     assert readability_error(values) == PLACEHOLDER_TEXT_ERROR
+
+
+def full_report(**overrides) -> dict:
+    return {
+        "title": "Login fails",
+        "description": "Cannot sign in with valid credentials",
+        "steps_to_reproduce": "1. Open login\n2. Submit",
+        "expected_result": "Dashboard opens",
+        "actual_result": "Error message appears",
+        **overrides,
+    }
+
+
+def test_distinct_fields_pass_identical_check() -> None:
+    assert identical_fields_error(full_report()) is None
+
+
+def test_identical_fields_ignore_case_and_punctuation() -> None:
+    values = full_report(
+        expected_result="Error message appears.",
+        actual_result="  error   MESSAGE appears ",
+    )
+
+    assert identical_fields_error(values) == (
+        "Expected result and actual result contain the same text."
+    )
+
+
+def test_more_than_two_identical_fields_are_listed() -> None:
+    values = full_report(description="Login fails", expected_result="login fails!")
+
+    assert identical_fields_error(values) == (
+        "Title, description and expected result contain the same text."
+    )

@@ -82,6 +82,7 @@ def test_batch_endpoint_reads_bug_reports_from_xlsx(monkeypatch) -> None:
             },
             "analysis": FAKE_ANALYSIS.model_dump(),
             "error": None,
+            "duplicate_of": None,
         }
     ]
 
@@ -251,6 +252,58 @@ def test_batch_endpoint_marks_placeholder_and_invalid_reports_as_failed(
     assert valid["status"] == "analyzed"
 
 
+def test_batch_endpoint_marks_duplicate_bugs(monkeypatch) -> None:
+    analyzed_titles = []
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        analyzed_titles.append(bug.title)
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    login = ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error")
+    logout = ("Logout fails", "Cannot sign out", "1. Logout", "Login page", "Error")
+    login_again = ("LOGIN FAILS", "Cannot  sign in.", "1. login", "Dashboard!", "error")
+
+    content = excel_bytes([HEADER, login, logout, login_again, logout])
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert analyzed_titles == ["Login fails", "Logout fails"]
+    assert data["completed"] == 2
+    assert data["failed"] == 0
+    assert data["duplicates"] == 2
+    assert [bug["status"] for bug in data["bugs"]] == [
+        "analyzed",
+        "analyzed",
+        "duplicate",
+        "duplicate",
+    ]
+    assert [bug["duplicate_of"] for bug in data["bugs"]] == [None, None, 1, 2]
+    assert data["bugs"][2]["analysis"] is None
+
+
+def test_batch_endpoint_marks_rows_with_identical_fields_as_failed(
+    monkeypatch,
+) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [HEADER, ("Login fails", "Cannot sign in", "1. Login", "Error", "Error")]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    bug = response.json()["bugs"][0]
+    assert bug["status"] == "failed"
+    assert bug["error"] == "Expected result and actual result contain the same text."
+
+
 def test_batch_endpoint_finds_header_below_report_title(monkeypatch) -> None:
     async def fake_analyze_with_llm(bug, screenshots=None):
         return FAKE_ANALYSIS
@@ -338,6 +391,7 @@ def test_batch_progress_reports_rejected_rows_up_front(monkeypatch) -> None:
             "completed": 0,
             "failed": 1,
             "rejected": 1,
+            "duplicates": 0,
         }
     ]
     assert "tab-a" not in bugs.batch_progress

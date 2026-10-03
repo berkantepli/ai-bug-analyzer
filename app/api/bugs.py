@@ -8,7 +8,7 @@ from app.schemas.bug import BugReportCreate
 
 from app.services.llm_analyzer import InvalidBugReportError, analyze_with_llm
 from app.services.batch_analyzer import parse_bug_spreadsheet
-from app.services.readability import readability_error
+from app.services.readability import identical_fields_error, readability_error
 
 import asyncio
 
@@ -53,10 +53,16 @@ async def process_batch_record(
         "bug": values,
         "analysis": None,
         "error": record["error"],
+        "duplicate_of": record["duplicate_of"],
     }
 
     # Rows rejected while reading the Excel file are counted up front.
     if result["error"]:
+        return result
+
+    # Repeated bugs are not sent to the LLM; the first occurrence is analyzed.
+    if result["duplicate_of"]:
+        result["status"] = "duplicate"
         return result
 
     try:
@@ -119,7 +125,7 @@ async def analyze_bug(
         "expected_result": expected_result,
         "actual_result": actual_result,
     }
-    error = readability_error(values)
+    error = readability_error(values) or identical_fields_error(values)
     if error:
         raise HTTPException(status_code=422, detail=error)
 
@@ -159,6 +165,7 @@ async def analyze_bug_batch(
         "completed": 0,
         "failed": 0,
         "rejected": 0,
+        "duplicates": 0,
     }
     batch_progress[batch_id] = progress
 
@@ -166,6 +173,7 @@ async def analyze_bug_batch(
         records = await parse_bug_spreadsheet(file)
 
         rejected = sum(1 for record in records if record["error"])
+        duplicates = sum(1 for record in records if record["duplicate_of"])
         total = len(records)
 
         progress.update(
@@ -173,6 +181,7 @@ async def analyze_bug_batch(
             total=total,
             failed=rejected,
             rejected=rejected,
+            duplicates=duplicates,
         )
 
         worker_count = calculate_worker_count(total)
@@ -193,8 +202,9 @@ async def analyze_bug_batch(
         return {
             "batch_id": batch_id,
             "total": total,
-            "completed": total - failed,
+            "completed": total - failed - duplicates,
             "failed": failed,
+            "duplicates": duplicates,
             "rejected": rejected,
             "workers": worker_count,
             "bugs": results,

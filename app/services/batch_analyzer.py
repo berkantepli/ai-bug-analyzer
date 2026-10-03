@@ -5,7 +5,11 @@ from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
 import xlrd
 
-from app.services.readability import readability_error
+from app.services.readability import (
+    identical_fields_error,
+    normalize_text,
+    readability_error,
+)
 
 
 FIELD_ALIASES = {
@@ -119,14 +123,33 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
         if missing_values:
             error = f"Missing required values: {', '.join(missing_values)}."
         else:
-            error = readability_error(values)
-        records.append({"row": row_number, "values": values, "error": error})
+            error = readability_error(values) or identical_fields_error(values)
+        records.append(
+            {"row": row_number, "values": values, "error": error, "duplicate_of": None}
+        )
 
     if not records:
         raise HTTPException(
             status_code=422, detail="The Excel file contains no bug records."
         )
+
+    _mark_duplicates(records)
     return records
+
+
+def _mark_duplicates(records: list[dict]) -> None:
+    """Point repeated bugs at the 1-based number of their first occurrence."""
+    first_seen: dict[tuple[str, ...], int] = {}
+    for bug_number, record in enumerate(records, start=1):
+        if record["error"]:
+            continue
+        key = tuple(
+            normalize_text(record["values"][field]) for field in REQUIRED_FIELDS
+        )
+        if key in first_seen:
+            record["duplicate_of"] = first_seen[key]
+        else:
+            first_seen[key] = bug_number
 
 
 async def parse_bug_spreadsheet(file: UploadFile) -> list[dict]:

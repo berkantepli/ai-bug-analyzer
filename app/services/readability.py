@@ -18,6 +18,14 @@ READABILITY_FIELDS = (
 
 MIN_READABLE_WORD_RATIO = 0.5
 
+COMPARED_FIELDS = (
+    "title",
+    "description",
+    "steps_to_reproduce",
+    "expected_result",
+    "actual_result",
+)
+
 UNREADABLE_TEXT_ERROR = "The bug report text is unreadable."
 PLACEHOLDER_TEXT_ERROR = "The bug report contains only placeholder text."
 
@@ -58,6 +66,31 @@ PLACEHOLDER_WORDS = {
     "lorem",
     "ipsum",
 }
+
+
+def normalize_text(value: str) -> str:
+    """Lowercase and drop punctuation and extra whitespace for comparisons."""
+    return " ".join(re.sub(r"[^\w]+", " ", value.lower()).split())
+
+
+def identical_fields_error(values: dict[str, str]) -> Optional[str]:
+    """Return an error when two or more fields contain the same text."""
+    groups: dict[str, list[str]] = {}
+    for field in COMPARED_FIELDS:
+        text = normalize_text(values.get(field, ""))
+        if text:
+            groups.setdefault(text, []).append(field.replace("_", " "))
+
+    repeated = next((fields for fields in groups.values() if len(fields) > 1), None)
+    if repeated is None:
+        return None
+
+    names = (
+        " and ".join(repeated)
+        if len(repeated) == 2
+        else ", ".join(repeated[:-1]) + " and " + repeated[-1]
+    )
+    return f"{names[0].upper()}{names[1:]} contain the same text."
 
 
 def _strip(token: str) -> str:

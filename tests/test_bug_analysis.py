@@ -90,3 +90,25 @@ def test_bug_analysis_rejects_report_the_llm_marks_invalid(monkeypatch) -> None:
     assert response.json() == {
         "detail": "Not a valid bug report: The text is a cake recipe, not a bug report."
     }
+
+
+def test_bug_analysis_rejects_identical_expected_and_actual_results(
+    monkeypatch,
+) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        raise AssertionError("LLM should not be called")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    same_results = {
+        **VALID_BUG,
+        "expected_result": "Application crashes.",
+        "actual_result": "Application crashes.",
+    }
+
+    response = client.post("/bugs/analyze", data=same_results)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Expected result and actual result contain the same text."
+    }

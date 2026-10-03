@@ -42,6 +42,9 @@
             --low-bg: rgba(34, 197, 94, 0.16);
             --low-border: rgba(74, 222, 128, 0.45);
             --low-text: #86efac;
+            --duplicate-bg: rgba(139, 92, 246, 0.16);
+            --duplicate-border: rgba(167, 139, 250, 0.45);
+            --duplicate-text: #c4b5fd;
         }
 
         body.light {
@@ -75,6 +78,9 @@
             --low-bg: #f0fdf4;
             --low-border: #bbf7d0;
             --low-text: #15803d;
+            --duplicate-bg: #f5f3ff;
+            --duplicate-border: #ddd6fe;
+            --duplicate-text: #6d28d9;
         }
 
         html {
@@ -683,7 +689,7 @@
         .batch-summary {
             grid-column: 1 / -1;
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 12px;
         }
 
@@ -853,6 +859,22 @@
             background:
                 linear-gradient(var(--critical-bg), var(--critical-bg)),
                 var(--card);
+        }
+
+        .severity-badge.status-duplicate {
+            border-color: var(--duplicate-border);
+            background: var(--duplicate-bg);
+            color: var(--duplicate-text);
+            font-weight: 700;
+        }
+
+        .batch-bug-card.is-duplicate {
+            border-style: dashed;
+            border-color: var(--duplicate-border);
+        }
+
+        .batch-bug-card.is-duplicate .batch-bug-title {
+            color: var(--muted);
         }
 
         .batch-bug-card.is-failed .batch-bug-title {
@@ -2571,7 +2593,7 @@
             stopBatchProgressPolling();
 
             const total = data.total;
-            let processed = total - (data.rejected || 0);
+            let processed = total - (data.rejected || 0) - (data.duplicates || 0);
 
             const remaining = total - processed;
             const stepDelay = Math.min(1750, 15000 / Math.max(remaining, 1));
@@ -3184,13 +3206,16 @@
                 missing_information: "Missing Information"
             };
 
+            const isDuplicateBug = bug => bug.status === "duplicate";
+
             const isFailedBug = bug =>
-                bug.status === "failed" ||
-                !bug.analysis ||
-                typeof bug.analysis !== "object";
+                !isDuplicateBug(bug) &&
+                (bug.status === "failed" ||
+                    !bug.analysis ||
+                    typeof bug.analysis !== "object");
 
             const analyses = data.bugs
-                .filter(bug => !isFailedBug(bug))
+                .filter(bug => !isDuplicateBug(bug) && !isFailedBug(bug))
                 .map(bug => bug.analysis);
 
             const overviewHeading = document.createElement("h3");
@@ -3201,14 +3226,11 @@
             const overview = document.createElement("div");
             overview.className = "batch-summary";
 
-            const totalBugs = data.bugs.length;
-            const analyzedBugs = analyses.length;
-            const failedBugs = Math.max(totalBugs - analyzedBugs, 0);
-
             const overviewFields = [
-                ["Bugs", totalBugs],
-                ["Analyzed", analyzedBugs],
-                ["Failed", failedBugs]
+                ["Bugs", data.bugs.length],
+                ["Analyzed", analyses.length],
+                ["Failed", data.bugs.filter(isFailedBug).length],
+                ["Duplicates", data.bugs.filter(isDuplicateBug).length]
             ];
 
             overviewFields.forEach(([labelText, valueText]) => {
@@ -3333,6 +3355,10 @@
 
             data.bugs.forEach((bug, index) => {
                 const isFailed = isFailedBug(bug);
+                const isDuplicate = isDuplicateBug(bug);
+                const hasNoAnalysis = isFailed || isDuplicate;
+                const duplicateMessage =
+                    `This bug is a duplicate of Bug ${bug.duplicate_of}.`;
                 const excelValues = bug.bug || {};
                 const analysis = isFailed
                     ? {
@@ -3341,11 +3367,14 @@
                         missing_information:
                             bug.error || "The bug could not be analyzed."
                     }
-                    : bug.analysis;
+                    : isDuplicate
+                        ? { missing_information: duplicateMessage }
+                        : bug.analysis;
 
                 const bugCard = document.createElement("details");
                 bugCard.className = "batch-bug-card";
                 bugCard.classList.toggle("is-failed", isFailed);
+                bugCard.classList.toggle("is-duplicate", isDuplicate);
 
                 const heading = document.createElement("summary");
                 heading.className = "batch-bug-header";
@@ -3369,6 +3398,15 @@
                     failedBadge.setAttribute("aria-label", failedTooltip);
 
                     heading.appendChild(failedBadge);
+                } else if (isDuplicate) {
+                    const duplicateBadge = document.createElement("span");
+                    duplicateBadge.className = "severity-badge status-duplicate";
+                    duplicateBadge.textContent = `DUPLICATE OF BUG ${bug.duplicate_of}`;
+
+                    duplicateBadge.setAttribute("data-tooltip", duplicateMessage);
+                    duplicateBadge.setAttribute("aria-label", duplicateMessage);
+
+                    heading.appendChild(duplicateBadge);
                 } else if (severity !== undefined && severity !== null) {
                     const severityBadge = document.createElement("span");
                     severityBadge.className = `severity-badge severity-${String(severity).toLowerCase()}`;
@@ -3438,7 +3476,7 @@
 
                     const value = document.createElement("div");
                     value.className = "result-value";
-                    value.textContent = isFailed
+                    value.textContent = hasNoAnalysis
                         ? analysis[key] || "—"
                         : formatAnalysisValue(key, analysis[key]);
 
