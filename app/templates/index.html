@@ -3853,7 +3853,62 @@
             }
 
             refreshAnalyzeButtons();
+            scheduleServiceRecheck();
         }
+
+        // While the service is unavailable, check again every few seconds so
+        // the status recovers on its own when Ollama comes back.
+        const SERVICE_RECHECK_INTERVAL_MS = 10000;
+        let serviceRecheckTimer = null;
+        let serviceRecheckRunning = false;
+
+        function scheduleServiceRecheck() {
+            clearTimeout(serviceRecheckTimer);
+            serviceRecheckTimer = null;
+
+            if (serviceStatus === "unavailable") {
+                serviceRecheckTimer = setTimeout(
+                    recheckUnavailableService,
+                    SERVICE_RECHECK_INTERVAL_MS
+                );
+            }
+        }
+
+        async function recheckUnavailableService() {
+            clearTimeout(serviceRecheckTimer);
+            serviceRecheckTimer = null;
+
+            // A hidden tab is checked again when it becomes visible.
+            if (
+                serviceStatus !== "unavailable" ||
+                document.hidden ||
+                serviceRecheckRunning
+            ) {
+                return;
+            }
+
+            serviceRecheckRunning = true;
+
+            try {
+                const data = await checkAnalysisHealth();
+
+                if (!data.available) {
+                    scheduleServiceRecheck();
+                } else if (!diagnosisModal.hidden) {
+                    await runDiagnosis();
+                } else {
+                    setServiceStatus("available");
+                }
+            } finally {
+                serviceRecheckRunning = false;
+            }
+        }
+
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden && serviceStatus === "unavailable") {
+                recheckUnavailableService();
+            }
+        });
 
         function renderDiagnosisMessage(statusClass, statusLabel, message) {
             serviceDiagnosisMessage.innerHTML = `
