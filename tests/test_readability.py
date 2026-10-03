@@ -1,7 +1,9 @@
 import pytest
 
 from app.services.readability import (
+    MAX_FIELD_CHARS,
     PLACEHOLDER_TEXT_ERROR,
+    field_length_error,
     UNREADABLE_TEXT_ERROR,
     identical_fields_error,
     readability_error,
@@ -118,3 +120,17 @@ def test_more_than_two_identical_fields_are_listed() -> None:
     assert identical_fields_error(values) == (
         "Title, description and expected result contain the same text."
     )
+
+
+def test_long_field_is_rejected() -> None:
+    values = full_report(description="x" * (MAX_FIELD_CHARS + 1))
+
+    assert field_length_error(values) == (
+        f"Description is longer than {MAX_FIELD_CHARS} characters."
+    )
+
+
+def test_field_at_the_limit_is_accepted() -> None:
+    values = full_report(description="x" * MAX_FIELD_CHARS)
+
+    assert field_length_error(values) is None

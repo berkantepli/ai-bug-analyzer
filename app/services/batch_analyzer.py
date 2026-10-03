@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 import xlrd
 
 from app.services.readability import (
+    field_length_error,
     identical_fields_error,
     normalize_text,
     readability_error,
@@ -172,7 +173,11 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
         if missing_values:
             error = f"Missing required values: {', '.join(missing_values)}."
         else:
-            error = readability_error(values) or identical_fields_error(values)
+            error = (
+                field_length_error(values)
+                or readability_error(values)
+                or identical_fields_error(values)
+            )
         records.append(
             {"row": row_number, "values": values, "error": error, "duplicate_of": None}
         )

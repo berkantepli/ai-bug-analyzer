@@ -21,7 +21,7 @@ Enter a title, description, steps to reproduce, expected result, actual result a
 
 If a screenshot shows a different page than the report describes, the report is still analyzed. The mismatch is explained in Visual Evidence and confidence is capped at 0.6.
 
-Up to 5 screenshots of at most 10 MB each can be attached, in PNG, JPEG, WEBP, GIF or BMP format.
+Each text field can be up to 5,000 characters. Up to 5 screenshots of at most 10 MB each can be attached, in PNG, JPEG, WEBP, GIF or BMP format.
 
 ### Report language
 
@@ -35,6 +35,7 @@ Low-quality input is rejected with a clear reason instead of producing a mislead
 |---|---|---|
 | Unreadable text | `Xq7#vL@`, `asdkj qweoiu`, `asdfasdf`, `aaaaaa` | Backend, before the LLM |
 | Placeholder text | `test test`, `lorem ipsum`, `n/a` | Backend, before the LLM |
+| Field longer than 5,000 characters | A pasted log file | Backend, before the LLM |
 | Same text in two or more fields | Expected result = actual result | Backend, before the LLM |
 | Not a meaningful bug report | Nonsense sentences, a cake recipe | LLM |
 

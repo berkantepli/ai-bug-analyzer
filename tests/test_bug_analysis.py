@@ -112,3 +112,19 @@ def test_bug_analysis_rejects_identical_expected_and_actual_results(
     assert response.json() == {
         "detail": "Expected result and actual result contain the same text."
     }
+
+
+def test_bug_analysis_rejects_too_long_field(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        raise AssertionError("LLM should not be called")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    long_bug = {**VALID_BUG, "description": "Long text. " * 1000}
+
+    response = client.post("/bugs/analyze", data=long_bug)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Description is longer than 5000 characters."
+    }

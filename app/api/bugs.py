@@ -8,7 +8,11 @@ from app.schemas.bug import BugReportCreate
 
 from app.services.llm_analyzer import InvalidBugReportError, analyze_with_llm
 from app.services.batch_analyzer import parse_bug_spreadsheet
-from app.services.readability import identical_fields_error, readability_error
+from app.services.readability import (
+    field_length_error,
+    identical_fields_error,
+    readability_error,
+)
 
 import asyncio
 
@@ -177,7 +181,11 @@ async def analyze_bug(
         "expected_result": expected_result,
         "actual_result": actual_result,
     }
-    error = readability_error(values) or identical_fields_error(values)
+    error = (
+        field_length_error(values)
+        or readability_error(values)
+        or identical_fields_error(values)
+    )
     if error:
         raise HTTPException(status_code=422, detail=error)
 

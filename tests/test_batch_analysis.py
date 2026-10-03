@@ -304,6 +304,26 @@ def test_batch_endpoint_marks_rows_with_identical_fields_as_failed(
     assert bug["error"] == "Expected result and actual result contain the same text."
 
 
+def test_batch_endpoint_marks_too_long_rows_as_failed(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            HEADER,
+            ("Login fails", "Long text. " * 1000, "1. Login", "Dashboard", "Error"),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    bug = response.json()["bugs"][0]
+    assert bug["status"] == "failed"
+    assert bug["error"] == "Description is longer than 5000 characters."
+
+
 def test_batch_endpoint_finds_header_below_report_title(monkeypatch) -> None:
     async def fake_analyze_with_llm(bug, screenshots=None):
         return FAKE_ANALYSIS

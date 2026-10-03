@@ -1,4 +1,4 @@
-"""Cheap checks that catch meaningless or low-effort bug report text.
+"""Cheap checks that catch unusable bug report text before the LLM is called.
 
 These run before the LLM is called. Text built from real words that still
 makes no sense is left to the LLM, which reports it as an invalid bug report.
@@ -25,6 +25,10 @@ COMPARED_FIELDS = (
     "expected_result",
     "actual_result",
 )
+
+# Keeps every report well inside the model's context window, so the text is
+# never silently cut off.
+MAX_FIELD_CHARS = 5000
 
 UNREADABLE_TEXT_ERROR = "The bug report text is unreadable."
 PLACEHOLDER_TEXT_ERROR = "The bug report contains only placeholder text."
@@ -66,6 +70,15 @@ PLACEHOLDER_WORDS = {
     "lorem",
     "ipsum",
 }
+
+
+def field_length_error(values: dict[str, str]) -> Optional[str]:
+    """Return an error when a field is too long for the model to read."""
+    for field in COMPARED_FIELDS:
+        if len(values.get(field, "")) > MAX_FIELD_CHARS:
+            name = field.replace("_", " ").capitalize()
+            return f"{name} is longer than {MAX_FIELD_CHARS} characters."
+    return None
 
 
 def normalize_text(value: str) -> str:
