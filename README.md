@@ -62,7 +62,7 @@ The page shows whether the analysis service is available and keeps it up to date
 - The file must contain **a single sheet**; only the active sheet is read.
 - Limits: at most **5 MB**, **2000 rows** in the sheet and **500 bug records**.
 - The header row may be anywhere in the **first 20 rows**, so report titles or notes can sit above it.
-- Header names are case- and punctuation-insensitive and must be in English:
+- The English headers below are recognized directly (case and punctuation do not matter). Headers in other languages or with other names (for example `Başlık`, `Beschreibung`) are matched by the LLM, which needs Ollama; the matching is shown above the results so it can be checked:
 
 | Field | Required | Accepted headers |
 |---|---|---|
@@ -212,7 +212,7 @@ The app is built to run **locally for a single user**:
 
 - Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, and a batch is processed bug by bug.
 - Very large screenshots use many tokens; if a report and its screenshots still do not fit into the context window, the analysis is rejected with a message asking for fewer screenshots or a shorter text.
-- Excel header names must be in English. Cell contents can be in any language.
+- Matching non-English Excel headers needs Ollama and adds a few seconds; if the LLM cannot match every required column, the file is rejected.
 - Formula cells are only read correctly if the file was saved by Excel (cached values).
 - AI results are suggestions, not verified defects or confirmed root causes.
 
