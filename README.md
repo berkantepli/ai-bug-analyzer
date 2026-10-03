@@ -1,502 +1,210 @@
 # AI Bug Analyzer
 
-AI-powered bug analysis tool built as a QA-focused learning and portfolio project.
+A QA-focused tool that turns software bug reports into a structured analysis using a local vision-capable LLM (Ollama + Qwen3-VL). Analyze a single bug with optional screenshots, or a whole Excel file of bugs at once.
 
-AI Bug Analyzer takes a structured software bug report and analyzes it using a local vision-capable LLM. The goal is to turn raw bug reports into a structured QA analysis that helps testers and developers understand the issue, assess its impact, identify possible root causes, and generate relevant test scenarios.
-
-> **Note:** This is a learning and portfolio project. AI-generated analysis should be reviewed and validated by a human QA engineer before being treated as a confirmed finding.
+> **Note:** This is a learning and portfolio project. AI-generated analysis is a hypothesis and should be reviewed by a QA engineer before it is treated as a confirmed finding.
 
 ---
 
 ## Features
 
-### 🐞 Structured Bug Analysis
+### Single bug analysis
 
-Submit a bug report containing:
+Enter a title, description, steps to reproduce, expected result, actual result and optional screenshots. The result contains:
 
-- Bug title
-- Description
-- Steps to reproduce
-- Expected result
-- Actual result
-- Optional screenshots
+- **Severity** (`LOW` / `MEDIUM` / `HIGH` / `CRITICAL`) and **Priority** (`P1`–`P4`)
+- **Category**, **Impact** and **Possible Root Cause**
+- **Suggested Test Scenarios**: ID, category, type, scenario, expected result, purpose and priority
+- **Missing Information** that would help investigate the bug
+- **Confidence** (0.0–1.0)
+- **Visual Evidence**: what the screenshot shows and how it relates to the report
 
-The analyzer returns a structured QA-oriented result including:
+If a screenshot shows a different page than the report describes, the report is still analyzed. The mismatch is explained in Visual Evidence and confidence is capped at 0.6.
 
-- **Severity**
-  - Low
-  - Medium
-  - High
-  - Critical
-- **Priority**
-  - P1
-  - P2
-  - P3
-  - P4
-- **Category**
-- **Possible Root Cause**
-- **Suggested Test Scenarios**
-- **Missing Information**
-- **Confidence**
-- **Visual Evidence**
+### Report language
 
-The analysis output is presented through a dedicated UI rather than exposing the raw AI response.
+The analysis is written in the language of the report (for example English, Turkish or German). Quoted UI text such as button labels or error messages does not change the detected language. Severity, priority and category always stay in English so results can be grouped across reports.
+
+### Input checks
+
+Low-quality input is rejected with a clear reason instead of producing a misleading analysis:
+
+| Check | Example | Done by |
+|---|---|---|
+| Unreadable text | `Xq7#vL@`, `asdkj qweoiu`, `asdfasdf`, `aaaaaa` | Backend, before the LLM |
+| Placeholder text | `test test`, `lorem ipsum`, `n/a` | Backend, before the LLM |
+| Same text in two or more fields | Expected result = actual result | Backend, before the LLM |
+| Not a meaningful bug report | Nonsense sentences, a cake recipe | LLM |
+
+Short or vague reports about real software behavior (for example "It does not work") are still analyzed, with low confidence and a list of missing information.
+
+### Batch analysis (Excel)
+
+Upload an `.xlsx` or `.xls` file to analyze many bugs at once.
+
+- **Never stops on a bad row.** Rows with missing values, unusable text or LLM errors are shown as **FAILED** with the reason, and the remaining bugs are still analyzed.
+- **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
+- **Live progress** with elapsed time. Each browser tab tracks its own batch, so several batches can run at the same time.
+- **Summary** of analyzed, failed and duplicate bugs, with severity, priority and category counts.
+
+### Service diagnosis
+
+The page shows whether the analysis service is available. A diagnosis view checks Ollama, the required model and a real inference call, and suggests a fix for each failing step.
 
 ---
 
-### 🧪 QA-Focused Test Scenarios
+## Excel format
 
-The analyzer generates structured test scenarios instead of returning generic Positive / Negative labels.
+- The file must contain **a single sheet**; only the active sheet is read.
+- The header row may be anywhere in the **first 20 rows**, so report titles or notes can sit above it.
+- Header names are case- and punctuation-insensitive and must be in English:
 
-Each scenario can include:
+| Field | Required | Accepted headers |
+|---|---|---|
+| Title | ✅ | Title, Bug Title, Bug Name |
+| Description | ✅ | Description, Bug Description |
+| Steps to Reproduce | ✅ | Steps to Reproduce, Steps, Reproduction Steps |
+| Expected Result | ✅ | Expected Result, Expected Behavior |
+| Actual Result | ✅ | Actual Result, Actual Behavior |
+| Severity | – | Severity, Bug Severity, Issue Severity |
+| Priority | – | Priority, Bug Priority, Issue Priority |
+| Category | – | Category, Bug Category, Type, Bug Type |
+
+When the optional Severity, Priority or Category columns are filled, their values replace the ones suggested by the LLM. Numbers, percentages and dates are read as displayed in Excel (`404`, `15%`, `2026-10-02`).
+
+---
+
+## How it works
 
 ```text
-TC-01
-
-Functional Validation
-
-Scenario
-Enter valid card details and verify the Payment button becomes enabled.
-
-Expected Result
-Payment button should become enabled after all required fields pass validation.
-
-Purpose
-Verify that successful field validation correctly triggers the payment action.
-
-Priority
-High
+Bug report (+ screenshots)
+        │
+        ▼
+Backend checks ──────────────▶ rejected: unreadable / placeholder / identical fields
+        │
+        ▼
+LLM call 1: text only ───────▶ rejected: not a meaningful bug report
+  detects the report language
+  and judges whether the text is a bug report
+        │
+        ▼
+LLM call 2: report + screenshots
+  structured analysis in the detected language
+        │
+        ▼
+Web interface
 ```
 
-This is intended to make the AI output more useful from a practical software testing perspective.
+The model is forced to answer with JSON that matches a Pydantic schema, so every result has the same structure.
 
 ---
 
-### 🖼️ Screenshot & Visual Evidence Analysis
+## Tech stack
 
-Bug reports can include screenshots as additional evidence.
-
-When a screenshot is provided, the vision-capable model is instructed to inspect the image together with the written bug report and return concrete visual evidence when relevant.
-
-Examples of visual information that can be analyzed include:
-
-- Visible error messages
-- Button states
-- Form validation states
-- Labels and displayed values
-- UI elements
-- Enabled / disabled states
-- Other visible evidence related to the reported issue
-
-The system is instructed not to invent visual information that cannot be observed.
+- **Backend:** Python 3.9+, FastAPI, Pydantic, Uvicorn
+- **LLM:** Ollama with `qwen3-vl:8b-instruct`
+- **Frontend:** HTML, CSS and JavaScript in a single template
+- **Excel:** openpyxl (`.xlsx`), xlrd (`.xls`)
+- **Tests:** pytest, HTTPX
 
 ---
 
-### 📊 Batch Bug Analysis
-
-Multiple bug reports can be analyzed from an Excel file.
-
-Supported formats:
-
-- `.xlsx`
-- `.xls`
-
-The batch analyzer recognizes common column variations for:
-
-- Title
-- Description
-- Steps to Reproduce
-- Expected Result
-- Actual Result
-
-Batch analysis also provides:
-
-- Number of bugs analyzed
-- Progress percentage
-- Completed / total bug count
-- Elapsed analysis time
-- Processing status
-- Animated analysis status
-
-Example:
+## Project structure
 
 ```text
-Analyzing...
-━━━━━━━━━━━━━━━━━━━━━━ 60%
-
-6 / 10 bugs analyzed
-⏱ 00:42 elapsed
+app/
+├── api/
+│   ├── bugs.py              # /bugs endpoints: single, batch, batch progress
+│   └── health.py            # /health endpoints and service diagnosis
+├── schemas/
+│   ├── analysis.py          # BugAnalysis result schema
+│   └── bug.py               # BugReportCreate input schema
+├── services/
+│   ├── llm_analyzer.py      # Prompts and Ollama calls
+│   ├── batch_analyzer.py    # Excel parsing, header detection, duplicates
+│   └── readability.py       # Unreadable, placeholder and identical-field checks
+├── static/images/logo.png
+├── templates/index.html     # Web interface
+├── config.py                # Ollama URL and model
+└── main.py                  # FastAPI app
+tests/                       # pytest suite (the LLM is mocked)
 ```
-
----
-
-### 🔎 Analysis Service Diagnosis
-
-The application includes a service diagnosis interface for checking the local analysis environment.
-
-It can report the status of:
-
-- Ollama
-- Required model
-- Inference availability
-
-A **Retry Connection** action is also available to re-check the analysis service without refreshing the page.
-
----
-
-## Tech Stack
-
-### Backend
-
-- Python
-- FastAPI
-- Pydantic
-- Uvicorn
-
-### AI / LLM
-
-- Ollama
-- Qwen3-VL 8B Instruct
-
-The application communicates with the local Ollama API for bug analysis.
-
-### Frontend
-
-- HTML
-- CSS
-- JavaScript
-
-### Data / File Processing
-
-- OpenPyXL
-- xlrd
-- Excel `.xlsx` / `.xls`
-
-### Testing
-
-- Pytest
-- HTTPX
-
----
-
-## Architecture
-
-The project follows a lightweight layered structure:
-
-```text
-ai-bug-analyzer/
-│
-├── app/
-│   ├── api/
-│   │   ├── bugs.py
-│   │   └── health.py
-│   │
-│   ├── schemas/
-│   │   ├── analysis.py
-│   │   └── bug.py
-│   │
-│   ├── services/
-│   │   ├── llm_analyzer.py
-│   │   └── batch_analyzer.py
-│   │
-│   ├── static/
-│   │
-│   ├── templates/
-│   │   └── index.html
-│   │
-│   ├── config.py
-│   └── main.py
-│
-├── tests/
-│
-├── requirements.txt
-└── README.md
-```
-
-The FastAPI application exposes the bug analysis API under `/bugs` and serves the frontend from the application templates.
-
----
-
-## Analysis Flow
-
-```text
-Bug Report
-    │
-    ├── Title
-    ├── Description
-    ├── Steps to Reproduce
-    ├── Expected Result
-    ├── Actual Result
-    └── Screenshot (optional)
-            │
-            ▼
-     FastAPI Backend
-            │
-            ▼
-       Bug Analyzer
-            │
-            ▼
-   Local Ollama / Qwen3-VL
-            │
-            ▼
-    Structured QA Analysis
-            │
-            ├── Severity
-            ├── Priority
-            ├── Category
-            ├── Root Cause
-            ├── Test Scenarios
-            ├── Missing Information
-            ├── Confidence
-            └── Visual Evidence
-            │
-            ▼
-       Web Interface
-```
-
-The LLM prompt explicitly requires structured output and defines the expected analysis fields and severity / priority values.
 
 ---
 
 ## API
 
-### Health Check
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/bugs/analyze` | Analyze one bug (form fields + optional `screenshots`) |
+| `POST` | `/bugs/batch` | Analyze an Excel file (`file`, optional `batch_id`) |
+| `GET` | `/bugs/batch/{batch_id}/progress` | Progress of a running batch |
+| `GET` | `/health` | Application health |
+| `GET` | `/health/analysis` | Whether the analysis service is available |
+| `GET` | `/health/analysis/diagnose` | Step-by-step diagnosis with suggested fixes |
 
-```http
-GET /health
-```
-
-Returns the application health status.
-
-### Analyze Bug
-
-```http
-POST /bugs/analyze
-```
-
-Analyzes a single bug report.
-
-### Batch Analysis
-
-```http
-POST /bugs/batch
-```
-
-Accepts an Excel file and analyzes the contained bug reports.
+Interactive API docs are available at `/docs` while the app is running.
 
 ---
 
-## Installation
+## Setup
 
-### 1. Clone the repository
+**1. Clone and install**
 
 ```bash
 git clone https://github.com/berkantepli/ai-bug-analyzer.git
 cd ai-bug-analyzer
-```
-
-### 2. Create a virtual environment
-
-```bash
-python -m venv .venv
-```
-
-Activate it:
-
-#### macOS / Linux
-
-```bash
-source .venv/bin/activate
-```
-
-#### Windows
-
-```bash
-.venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-The project currently uses FastAPI, Uvicorn, Pytest and HTTPX among its core dependencies.
-
----
-
-## Ollama Setup
-
-AI Bug Analyzer uses a local Ollama instance.
-
-Install Ollama and make sure the required model is available:
+**2. Install Ollama and pull the model**
 
 ```bash
 ollama pull qwen3-vl:8b-instruct
 ```
 
-Start Ollama and verify that the model is available before running the application.
+Ollama must be running at `http://127.0.0.1:11434`. The URL and model name can be changed in `app/config.py`.
 
-The application currently targets:
-
-```text
-http://127.0.0.1:11434/api/chat
-```
-
-with:
-
-```text
-qwen3-vl:8b-instruct
-```
-
-as the configured model.
-
----
-
-## Run the Application
-
-Start the FastAPI application with:
+**3. Run the app**
 
 ```bash
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 ```
 
-Then open:
-
-```text
-http://127.0.0.1:8000
-```
+Open <http://127.0.0.1:8000>.
 
 ---
 
-## Testing
-
-Run the test suite with:
+## Tests
 
 ```bash
 pytest
 ```
 
----
-
-## Example Input
-
-```text
-Bug Title:
-Payment button remains disabled
-
-Description:
-The payment button does not become enabled after entering valid card details.
-
-Steps to Reproduce:
-1. Open the payment page.
-2. Enter a valid card number.
-3. Enter a valid expiration date.
-4. Enter a valid CVV.
-5. Observe the Payment button.
-
-Expected Result:
-The Payment button should become enabled.
-
-Actual Result:
-The Payment button remains disabled.
-```
-
-### Example Analysis
-
-```text
-Severity
-High
-
-Priority
-P2
-
-Category
-Functional
-
-Possible Root Cause
-The payment form validation state may not be updated correctly after valid field input.
-
-Suggested Test Scenarios
-
-TC-01
-Functional Validation
-
-Scenario
-Enter valid card details and verify the Payment button becomes enabled.
-
-Expected Result
-Payment button should become enabled after all required fields pass validation.
-
-Purpose
-Verify that successful field validation correctly triggers the payment action.
-
-Priority
-High
-```
+The tests mock the LLM, so Ollama does not need to be running.
 
 ---
 
-## Why I Built This
+## Limitations
 
-This project combines software testing knowledge with Python and AI/LLM experimentation.
-
-The main objective is not to replace a QA engineer, but to explore how AI can assist with repetitive QA analysis tasks such as:
-
-- Bug triage
-- Severity and priority assessment
-- Root-cause hypothesis generation
-- Test scenario generation
-- Bug report quality checks
-- Screenshot-based evidence analysis
-- Batch bug analysis
-
-It also serves as a practical portfolio project for exploring the intersection of **Software QA, Python, API development, and AI/LLM applications**.
+- Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, and a batch is processed bug by bug.
+- Excel header names must be in English. Cell contents can be in any language.
+- Formula cells are only read correctly if the file was saved by Excel (cached values).
+- AI results are suggestions, not verified defects or confirmed root causes.
 
 ---
 
-## Current Scope
+## Future improvements
 
-The project currently focuses on:
-
-- Structured bug analysis
-- Local LLM inference
-- Vision-based screenshot analysis
-- QA-oriented test scenario generation
-- Batch Excel analysis
-- Analysis progress tracking
-- Analysis service diagnosis
-- Human-readable analysis results
-
-AI-generated results are hypotheses and recommendations, not automatically verified defects or confirmed root causes.
-
----
-
-## Future Improvements
-
-Potential future improvements include:
-
-- Jira integration
-- Xray / test management integration
-- Persistent analysis history
-- Bug similarity / duplicate detection
-- Improved test case generation
-- Regression test recommendations
-- API and database integration
-- Automated report export
-- Authentication and user management
-- More advanced evaluation of AI analysis quality
-
----
-
-## Project Status
-
-🚧 **Active Development**
-
-This project is continuously evolving as new QA and AI capabilities are added.
+- Jira and test management (Xray) integration
+- Persistent analysis history and report export
+- Clearer errors when Ollama is unavailable during single bug analysis
+- File size and row count limits for batch uploads
 
 ---
 
 ## License
 
-This project is intended as a personal learning and portfolio project.
+Personal learning and portfolio project.
