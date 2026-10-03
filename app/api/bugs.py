@@ -216,6 +216,12 @@ async def analyze_bug(
         ) from error
     except ContextTooLargeError as error:
         raise HTTPException(status_code=413, detail=str(error)) from error
+    # Ollama unreachable, timeouts or an unusable LLM answer; the message is
+    # already written for users, the details are in the server log.
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=503, detail=f"The LLM could not analyze this bug: {error}"
+        ) from error
 
 
 @router.post("/batch")

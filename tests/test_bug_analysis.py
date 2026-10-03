@@ -140,3 +140,17 @@ def test_bug_analysis_explains_context_overflow(monkeypatch) -> None:
 
     assert response.status_code == 413
     assert response.json() == {"detail": "The report and screenshots are too long."}
+
+
+def test_bug_analysis_explains_llm_errors(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        raise RuntimeError("Could not connect to Ollama.")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    response = client.post("/bugs/analyze", data=VALID_BUG)
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "The LLM could not analyze this bug: Could not connect to Ollama."
+    }
