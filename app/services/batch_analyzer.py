@@ -2,11 +2,17 @@ from datetime import date, datetime, time
 from io import BytesIO
 from itertools import islice
 import re
+from typing import Optional
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
 import xlrd
 
+from app.services.llm_analyzer import (
+    SPREADSHEET_FIELDS,
+    OllamaUnavailableError,
+    match_spreadsheet_columns,
+)
 from app.services.readability import (
     field_length_error,
     identical_fields_error,
@@ -64,6 +70,11 @@ REQUIRED_FIELDS = (
 
 
 HEADER_SEARCH_ROWS = 20
+
+# What the LLM sees when the headers are not recognized: the header row and a
+# few shortened sample rows.
+COLUMN_SAMPLE_ROWS = 3
+COLUMN_SAMPLE_CHARS = 80
 
 # Upload limits that keep a single batch from exhausting memory or keeping
 # the LLM busy for hours.
@@ -142,6 +153,57 @@ def _find_header(rows: list[tuple[object, ...]]) -> tuple[int, dict[str, int]]:
     return best_row_index, best_indexes
 
 
+def _cell_text(value: object) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def _candidate_header_row(rows: list[tuple[object, ...]]) -> Optional[int]:
+    """First row with at least as many filled cells as required fields."""
+    for row_index, row in enumerate(rows[:HEADER_SEARCH_ROWS]):
+        if sum(1 for value in row if _cell_text(value)) >= len(REQUIRED_FIELDS):
+            return row_index
+    return None
+
+
+async def _match_columns_with_llm(
+    rows: list[tuple[object, ...]],
+) -> Optional[tuple[int, dict[str, int]]]:
+    """Let the LLM match headers it does not know, for example other languages.
+
+    The answer is only used when every required field gets its own existing
+    column; optional fields that clash with another field are dropped.
+    """
+    header_index = _candidate_header_row(rows)
+    if header_index is None:
+        return None
+
+    headers = [_cell_text(value) for value in rows[header_index]]
+    samples = [
+        [_cell_text(value)[:COLUMN_SAMPLE_CHARS] for value in row]
+        for row in rows[header_index + 1 :]
+        if any(_cell_text(value) for value in row)
+    ][:COLUMN_SAMPLE_ROWS]
+
+    mapping = await match_spreadsheet_columns(headers, samples)
+
+    def is_column(index: object) -> bool:
+        return isinstance(index, int) and 0 <= index < len(headers) and headers[index]
+
+    required = {field: mapping.get(field) for field in REQUIRED_FIELDS}
+    if not all(is_column(index) for index in required.values()):
+        return None
+    if len(set(required.values())) != len(required):
+        return None
+
+    indexes = dict(required)
+    for field in SPREADSHEET_FIELDS:
+        index = mapping.get(field)
+        if field not in indexes and is_column(index) and index not in indexes.values():
+            indexes[field] = index
+
+    return header_index, indexes
+
+
 def build_record(row_number: int, values: dict[str, str]) -> dict:
     """Validate one bug's values; rows with an error are not sent to the LLM."""
     missing_values = [
@@ -160,18 +222,43 @@ def build_record(row_number: int, values: dict[str, str]) -> dict:
     return {"row": row_number, "values": values, "error": error, "duplicate_of": None}
 
 
-def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
+async def _records_from_rows(
+    rows: list[tuple[object, ...]],
+) -> tuple[list[dict], Optional[dict[str, str]]]:
+    """Return the bug records and, when the LLM matched the columns, which
+    header was used for each field so the user can check it."""
     if not rows:
         raise HTTPException(status_code=422, detail="The Excel file is empty.")
 
     header_index, indexes = _find_header(rows)
+    detected_columns = None
 
     missing = [field for field in REQUIRED_FIELDS if field not in indexes]
     if missing:
-        labels = ", ".join(field.replace("_", " ") for field in missing)
-        raise HTTPException(
-            status_code=422, detail=f"Missing required Excel columns: {labels}."
-        )
+        hint = ""
+        try:
+            matched = await _match_columns_with_llm(rows)
+        except OllamaUnavailableError:
+            matched = None
+            hint = (
+                " Headers that are not in English are matched by the LLM, "
+                "but Ollama is unavailable."
+            )
+        except RuntimeError:
+            matched = None
+
+        if matched is None:
+            labels = ", ".join(field.replace("_", " ") for field in missing)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Missing required Excel columns: {labels}.{hint}",
+            )
+
+        header_index, indexes = matched
+        headers = rows[header_index]
+        detected_columns = {
+            field: _cell_text(headers[index]) for field, index in indexes.items()
+        }
 
     records = []
     for row_number, row in enumerate(
@@ -202,7 +289,7 @@ def _records_from_rows(rows: list[tuple[object, ...]]) -> list[dict]:
         )
 
     _mark_duplicates(records)
-    return records
+    return records, detected_columns
 
 
 def _mark_duplicates(records: list[dict]) -> None:
@@ -220,7 +307,9 @@ def _mark_duplicates(records: list[dict]) -> None:
             first_seen[key] = bug_number
 
 
-async def parse_bug_spreadsheet(file: UploadFile) -> list[dict]:
+async def parse_bug_spreadsheet(
+    file: UploadFile,
+) -> tuple[list[dict], Optional[dict[str, str]]]:
     filename = (file.filename or "").lower()
     content = await file.read(MAX_EXCEL_BYTES + 1)
     if len(content) > MAX_EXCEL_BYTES:
@@ -271,4 +360,4 @@ async def parse_bug_spreadsheet(file: UploadFile) -> list[dict]:
             status_code=422, detail="The uploaded Excel file could not be read."
         ) from exc
 
-    return _records_from_rows(rows)
+    return await _records_from_rows(rows)

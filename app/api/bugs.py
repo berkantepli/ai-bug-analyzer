@@ -284,9 +284,13 @@ async def analyze_bug(
 
 async def _run_batch(
     batch_id: Optional[str],
-    load_records: Callable[[], Awaitable[list[dict]]],
+    load_records: Callable[[], Awaitable[tuple[list[dict], Optional[dict]]]],
 ) -> dict:
-    """Analyze records with live progress; shared by batch and retry."""
+    """Analyze records with live progress; shared by batch and retry.
+
+    load_records returns the records and, when the LLM matched the Excel
+    columns, the header used for each field.
+    """
     batch_id = batch_id or uuid4().hex
     if batch_id in batch_progress:
         raise HTTPException(status_code=409, detail="Batch is already running.")
@@ -303,7 +307,7 @@ async def _run_batch(
     batch_progress[batch_id] = progress
 
     try:
-        records = await load_records()
+        records, detected_columns = await load_records()
 
         rejected = sum(1 for record in records if record["error"])
         duplicates = sum(1 for record in records if record["duplicate_of"])
@@ -343,6 +347,8 @@ async def _run_batch(
             "not_analyzed": not_analyzed,
             "rejected": rejected,
             "workers": worker_count,
+            # Set when the Excel headers were matched by the LLM.
+            "detected_columns": detected_columns,
             # Set when Ollama became unreachable and the batch stopped
             # sending the remaining bugs.
             "stopped_reason": (
@@ -383,7 +389,7 @@ async def retry_bug_batch(request: RetryRequest):
     not have to be uploaded again. They are validated like Excel rows.
     """
 
-    async def load_records() -> list[dict]:
-        return [build_record(item.row, item.bug) for item in request.bugs]
+    async def load_records() -> tuple[list[dict], None]:
+        return [build_record(item.row, item.bug) for item in request.bugs], None
 
     return await _run_batch(request.batch_id, load_records)
