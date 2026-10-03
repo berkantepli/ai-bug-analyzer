@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 
 from pydantic import BaseModel
 
-from app.config import OLLAMA_MODEL, OLLAMA_URL
+from app.config import OLLAMA_CONTEXT_LENGTH, OLLAMA_MODEL, OLLAMA_URL
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
 
@@ -353,6 +353,7 @@ async def _request_json(prompt: str, images: list[str], schema: type) -> dict:
         "format": schema.model_json_schema(),
         "options": {
             "temperature": 0.1,
+            "num_ctx": OLLAMA_CONTEXT_LENGTH,
         },
     }
 

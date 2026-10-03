@@ -5,7 +5,7 @@ import logging
 
 from fastapi import APIRouter
 
-from app.config import OLLAMA_MODEL, OLLAMA_URL
+from app.config import OLLAMA_CONTEXT_LENGTH, OLLAMA_MODEL, OLLAMA_URL
 
 
 logger = logging.getLogger(__name__)
@@ -123,6 +123,7 @@ def check_inference(ollama_result: dict, model_result: dict) -> dict:
                 "model": OLLAMA_MODEL,
                 "prompt": "Reply with exactly: INFERENCE_TEST",
                 "stream": False,
+                "options": {"num_ctx": OLLAMA_CONTEXT_LENGTH},
             }
         ).encode("utf-8")
 

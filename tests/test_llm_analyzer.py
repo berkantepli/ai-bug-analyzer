@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from app.config import OLLAMA_CONTEXT_LENGTH
 from app.schemas.bug import BugReportCreate
 from app.services import llm_analyzer
 
@@ -153,3 +154,14 @@ def test_mismatched_screenshot_caps_confidence(monkeypatch) -> None:
     )
 
     assert analysis.confidence == 0.6
+
+
+def test_every_request_uses_the_configured_context_length(monkeypatch) -> None:
+    payloads = fake_ollama(monkeypatch, validity(), llm_message(ANALYSIS_FIELDS))
+
+    asyncio.run(llm_analyzer.analyze_with_llm(BUG))
+
+    assert [payload["options"]["num_ctx"] for payload in payloads] == [
+        OLLAMA_CONTEXT_LENGTH,
+        OLLAMA_CONTEXT_LENGTH,
+    ]

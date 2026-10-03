@@ -168,7 +168,9 @@ pip install -r requirements.txt
 ollama pull qwen3-vl:8b-instruct
 ```
 
-Ollama must be running at `http://127.0.0.1:11434`. The URL and model name can be changed in `app/config.py`.
+Ollama must be running at `http://127.0.0.1:11434`. The URL, model name and context window can be changed in `app/config.py`.
+
+The app asks Ollama for a 16,384-token context window instead of its 4,096-token default, so reports with several screenshots fit. With this setting the model uses about 7.7 GB of memory instead of 5.8 GB.
 
 **3. Run the app**
 
