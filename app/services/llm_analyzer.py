@@ -420,11 +420,28 @@ def _raise_if_invalid(validity: ReportValidity) -> None:
         )
 
 
+# Number of analyses currently waiting on Ollama. The health check uses it
+# to avoid queueing a test request behind them and reporting a timeout.
+_running_analyses = 0
+
+
+def is_analyzing() -> bool:
+    return _running_analyses > 0
+
+
 async def analyze_with_llm(
     bug: BugReportCreate,
     screenshots: Optional[list] = None,
 ) -> BugAnalysis:
-    screenshots = screenshots or []
+    global _running_analyses
+    _running_analyses += 1
+    try:
+        return await _analyze_with_llm(bug, screenshots or [])
+    finally:
+        _running_analyses -= 1
+
+
+async def _analyze_with_llm(bug: BugReportCreate, screenshots: list) -> BugAnalysis:
 
     images = []
 

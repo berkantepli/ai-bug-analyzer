@@ -6,6 +6,7 @@ import logging
 from fastapi import APIRouter
 
 from app.config import OLLAMA_CONTEXT_LENGTH, OLLAMA_MODEL, OLLAMA_URL
+from app.services.llm_analyzer import is_analyzing
 
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,18 @@ def check_inference(ollama_result: dict, model_result: dict) -> dict:
                 "The required model is unavailable, so inference could not be tested."
             ),
             "suggested_action": "Make sure the required model is installed.",
+        }
+
+    # A test request would wait behind the running analyses and time out,
+    # although the model is working.
+    if is_analyzing():
+        return {
+            "status": "available",
+            "reason": (
+                f"{OLLAMA_MODEL} is busy analyzing bug reports, "
+                "so the inference test was skipped."
+            ),
+            "suggested_action": None,
         }
 
     try:
