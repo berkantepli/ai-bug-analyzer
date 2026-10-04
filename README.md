@@ -1,5 +1,7 @@
 # AI Bug Analyzer
 
+[![Tests](https://github.com/berkantepli/ai-bug-analyzer/actions/workflows/tests.yml/badge.svg)](https://github.com/berkantepli/ai-bug-analyzer/actions/workflows/tests.yml)
+
 AI Bug Analyzer reads a software bug report and returns a structured QA analysis: how severe the bug is, how urgent it is, what it affects, what might cause it, which tests to run and what information is missing.
 
 You can analyze **one bug** (with screenshots if you have them) or a **whole Excel or CSV file** of bugs at once. Everything runs on your own computer with a local AI model ([Ollama](https://ollama.com) + Qwen3-VL), so no bug report leaves your machine.
@@ -149,7 +151,7 @@ The app is meant to run **on your own computer for one user**:
 
 **Configuration:** The Ollama address, model name and context window are in `app/config.py`. The app asks Ollama for a 16,384-token context window so reports with several screenshots fit; the model then uses about 7.7 GB of memory.
 
-**Tests:** Run `pytest`. The AI is mocked, so Ollama does not need to run.
+**Tests:** Run `pytest`. The AI is mocked, so Ollama does not need to run. GitHub Actions runs the tests on every push and pull request.
 
 **Sample files:** [`samples/error-scenarios`](samples/error-scenarios) has an Excel, CSV or screenshot file for each error a user can run into, with the message the app gives for each one.
 
