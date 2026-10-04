@@ -2143,7 +2143,7 @@
                     </div>
 
                     <div class="batch-supported">
-                        Supported: .xlsx, .xls, .csv
+                        Supported: .xlsx, .xls, .csv · Max 5 MB
                     </div>
 
                 </div>
@@ -2306,6 +2306,9 @@
         let singleAbortController = null;
         let batchAbortController = null;
 
+        // Same limit as MAX_EXCEL_BYTES in app/services/batch_analyzer.py.
+        const MAX_BATCH_FILE_BYTES = 5 * 1024 * 1024;
+
         // Both analyze buttons follow the service status and whether an
         // analysis of that kind is already running.
         let serviceStatus = "checking";
@@ -2324,7 +2327,10 @@
 
             analyzeButton.disabled = !serviceUsable || singleAnalysisRunning;
             batchAnalyzeButton.disabled =
-                !serviceUsable || batchAnalysisRunning || !batchFileInput.files[0];
+                !serviceUsable ||
+                batchAnalysisRunning ||
+                !batchFileInput.files[0] ||
+                batchFileInput.files[0].size > MAX_BATCH_FILE_BYTES;
 
             const tooltip = SERVICE_BUTTON_TOOLTIPS[serviceStatus];
             for (const button of [analyzeButton, batchAnalyzeButton]) {
@@ -2625,11 +2631,26 @@
             displaySavedResult("batch");
         });
 
+        function formatFileSize(bytes) {
+            if (bytes < 1024 * 1024) {
+                return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+            }
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
         batchFileInput.addEventListener("change", () => {
             const file = batchFileInput.files[0];
+            const tooLarge = file && file.size > MAX_BATCH_FILE_BYTES;
 
-            batchFileName.classList.remove("invalid");
-            batchFileName.textContent = file ? file.name : "No file chosen";
+            batchFileName.classList.toggle("invalid", Boolean(tooLarge));
+            if (!file) {
+                batchFileName.textContent = "No file chosen";
+            } else if (tooLarge) {
+                batchFileName.textContent =
+                    `${file.name} (${formatFileSize(file.size)}) is larger than the 5 MB limit.`;
+            } else {
+                batchFileName.textContent = `${file.name} (${formatFileSize(file.size)})`;
+            }
             refreshAnalyzeButtons();
         });
 
