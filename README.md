@@ -124,7 +124,7 @@ The model is forced to answer with JSON that matches a Pydantic schema, so every
 
 - **Backend:** Python 3.9+, FastAPI, Pydantic, Uvicorn
 - **LLM:** Ollama with `qwen3-vl:8b-instruct`
-- **Frontend:** HTML, CSS and JavaScript in a single template
+- **Frontend:** plain HTML, CSS and JavaScript, no build step
 - **Excel and CSV:** openpyxl (`.xlsx`), xlrd (`.xls`), Python's csv module
 - **Tests:** pytest, HTTPX
 
@@ -146,8 +146,11 @@ app/
 │   ├── excel_values.py      # Severity and priority value mapping
 │   ├── readability.py       # Unreadable, placeholder and identical-field checks
 │   └── steps.py             # Splitting steps to reproduce into steps
-├── static/images/logo.png
-├── templates/index.html     # Web interface
+├── static/
+│   ├── css/styles.css       # Styles, light and dark theme
+│   ├── js/app.js            # Page logic and API calls
+│   └── images/logo.png
+├── templates/index.html     # Web interface markup
 ├── config.py                # Ollama URL and model
 └── main.py                  # FastAPI app
 tests/                       # pytest suite (the LLM is mocked)
