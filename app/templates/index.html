@@ -2202,7 +2202,18 @@
         const batchFileName = document.getElementById("batchFileName");
         const batchClearButton = document.getElementById("batchClearButton");
         const batchAnalyzeButton = document.getElementById("batchAnalyzeButton");
-        let resultContext = null;
+
+        // Single bug and batch analysis share the result area but keep their
+        // own last result, so an analysis that finishes in the other mode
+        // never replaces what is on screen. Each entry is null,
+        // { type: "result", data } or { type: "error", message }.
+        let activeMode = "single";
+        const savedResults = { single: null, batch: null };
+
+        // Clear cancels a running analysis of its mode; the server notices
+        // the closed request and stops sending its bugs to Ollama.
+        let singleAbortController = null;
+        let batchAbortController = null;
 
         // Both analyze buttons follow the service status and whether an
         // analysis of that kind is already running.
@@ -2509,7 +2520,8 @@
 
             bugForm.style.display = "";
             batchAnalysis.style.display = "none";
-            showResultsFor("single");
+            activeMode = "single";
+            displaySavedResult("single");
         });
 
         batchAnalysisMode.addEventListener("click", () => {
@@ -2518,7 +2530,8 @@
 
             bugForm.style.display = "none";
             batchAnalysis.style.display = "block";
-            showResultsFor("batch");
+            activeMode = "batch";
+            displaySavedResult("batch");
         });
 
         batchFileInput.addEventListener("change", () => {
@@ -2529,12 +2542,19 @@
         });
 
         batchClearButton.addEventListener("click", () => {
+            if (batchAbortController) {
+                batchAbortController.abort();
+            }
+            stopBatchProgressPolling();
             stopBatchTimer();
+            stopAnalyzingDots();
+            document.getElementById("batchProgress").hidden = true;
 
             batchFileInput.value = "";
             batchFileName.textContent = "No file chosen";
             refreshAnalyzeButtons();
-            clearResults();
+            currentBatchData = null;
+            setSavedResult("batch", null);
         });
 
         let batchStartTime = null;
@@ -2695,6 +2715,11 @@
                 try {
                     const progress = await fetchBatchProgress(batchId);
 
+                    // Polling was stopped (for example by Clear) meanwhile.
+                    if (!batchProgressInterval) {
+                        return;
+                    }
+
                     if (!progress || progress.status !== "processing") {
                         return;
                     }
@@ -2711,7 +2736,8 @@
             }, 1000);
         }
 
-        async function finishBatchProgress(data) {
+        // Stops early when the batch is cleared during the animation.
+        async function finishBatchProgress(data, signal) {
             stopBatchProgressPolling();
 
             const total = data.total;
@@ -2723,6 +2749,9 @@
             for (; processed < total; processed += 1) {
                 renderBatchProgress({ processed, total, done: false });
                 await sleep(stepDelay);
+                if (signal.aborted) {
+                    return;
+                }
             }
 
             renderBatchProgress({ processed: total, total, done: true });
@@ -2746,6 +2775,8 @@
 
             const batchId = createBatchId();
             const retryButton = document.getElementById("batchRetryButton");
+            const abortController = new AbortController();
+            batchAbortController = abortController;
 
             batchAnalysisRunning = true;
             refreshAnalyzeButtons();
@@ -2758,6 +2789,7 @@
             try {
                 const response = await fetch("/bugs/batch/retry", {
                     method: "POST",
+                    signal: abortController.signal,
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         batch_id: batchId,
@@ -2770,33 +2802,39 @@
                     throw retryData;
                 }
 
-                await finishBatchProgress(retryData);
+                await finishBatchProgress(retryData, abortController.signal);
+                if (abortController.signal.aborted) {
+                    return;
+                }
 
                 const retriedByRow = new Map(retryData.bugs.map(bug => [bug.row, bug]));
                 currentBatchData = {
                     ...data,
                     stopped_reason: retryData.stopped_reason,
+                    retry_error: null,
                     bugs: data.bugs.map(bug => retriedByRow.get(bug.row) || bug)
                 };
 
-                renderBatchResults(currentBatchData);
+                setSavedResult("batch", { type: "result", data: currentBatchData });
                 document.getElementById("batchProgress").hidden = false;
 
                 if (retryData.bugs.some(bug => (bug.error || "").startsWith(LLM_ERROR_PREFIX))) {
                     checkServiceStatus();
                 }
             } catch (error) {
+                if (abortController.signal.aborted) {
+                    return;
+                }
                 stopBatchProgressPolling();
                 stopBatchTimer();
                 stopAnalyzingDots();
 
-                const noticeText = document.querySelector(
-                    ".batch-stopped-notice .result-value"
-                );
-                if (noticeText) {
-                    noticeText.textContent = `Retry failed: ${formatError(error)}`;
-                }
+                currentBatchData = { ...data, retry_error: formatError(error) };
+                setSavedResult("batch", { type: "result", data: currentBatchData });
             } finally {
+                if (batchAbortController === abortController) {
+                    batchAbortController = null;
+                }
                 runningAnalyses -= 1;
                 batchAnalysisRunning = false;
 
@@ -2813,8 +2851,12 @@
             if (!file) return;
 
             const batchId = createBatchId();
+            const abortController = new AbortController();
+            batchAbortController = abortController;
 
-            clearResults();
+            currentBatchData = null;
+            setSavedResult("batch", null);
+            document.getElementById("batchProgress").hidden = true;
             startBatchTimer();
             startBatchProgressPolling(batchId);
 
@@ -2829,7 +2871,11 @@
                 const formData = new FormData();
                 formData.append("file", file);
                 formData.append("batch_id", batchId);
-                const response = await fetch("/bugs/batch", { method: "POST", body: formData });
+                const response = await fetch("/bugs/batch", {
+                    method: "POST",
+                    body: formData,
+                    signal: abortController.signal
+                });
                 let data;
                 try {
                     data = await response.json();
@@ -2837,9 +2883,12 @@
                     data = await response.text();
                 }
                 if (!response.ok) throw data;
-                await finishBatchProgress(data);
+                await finishBatchProgress(data, abortController.signal);
+                if (abortController.signal.aborted) {
+                    return;
+                }
                 currentBatchData = data;
-                renderBatchResults(data);
+                setSavedResult("batch", { type: "result", data });
                 document.getElementById("batchProgress").hidden = false;
 
                 // Bugs that failed because of Ollama may mean the service went
@@ -2848,14 +2897,18 @@
                     checkServiceStatus();
                 }
             } catch (error) {
+                if (abortController.signal.aborted) {
+                    return;
+                }
                 stopBatchProgressPolling();
                 stopBatchTimer();
                 stopAnalyzingDots();
-                clearResults();
-                errorMessage.textContent = formatError(error);
-                errorCard.classList.add("visible");
-                resultContext = { mode: "batch", type: "error" };
+                document.getElementById("batchProgress").hidden = true;
+                setSavedResult("batch", { type: "error", message: formatError(error) });
             } finally {
+                if (batchAbortController === abortController) {
+                    batchAbortController = null;
+                }
                 runningAnalyses -= 1;
                 batchAnalysisRunning = false;
                 refreshAnalyzeButtons();
@@ -3132,34 +3185,44 @@
 
             errorCard.classList.remove("visible");
             errorMessage.textContent = "";
-
-            const batchProgress = document.getElementById("batchProgress");
-            if (batchProgress) {
-                batchProgress.hidden = true;
-            }
-
-            resultContext = null;
         }
 
-        function showResultsFor(mode) {
-            resultCard.classList.remove("visible");
-            errorCard.classList.remove("visible");
+        function showError(message) {
+            clearResults();
+            errorMessage.textContent = message;
+            errorCard.classList.add("visible");
+        }
 
-            if (!resultContext || resultContext.mode !== mode) {
-                return;
+        // Shows the saved result of a mode in the shared result area.
+        function displaySavedResult(mode) {
+            const saved = savedResults[mode];
+
+            if (!saved) {
+                clearResults();
+            } else if (saved.type === "error") {
+                showError(saved.message);
+            } else if (mode === "single") {
+                renderAnalysis(saved.data);
+            } else {
+                renderBatchResults(saved.data);
             }
+        }
 
-            const card = resultContext.type === "result" ? resultCard : errorCard;
-            card.classList.add("visible");
+        // Keeps the result of a finished analysis and shows it only when its
+        // mode is on screen.
+        function setSavedResult(mode, result) {
+            savedResults[mode] = result;
+
+            if (activeMode === mode) {
+                displaySavedResult(mode);
+            }
         }
 
         function renderAnalysis(data) {
             clearResults();
 
             if (!data || typeof data !== "object") {
-                errorMessage.textContent = "The analysis response was empty.";
-                errorCard.classList.add("visible");
-                resultContext = { mode: "single", type: "error" };
+                showError("The analysis response was empty.");
                 return;
             }
 
@@ -3213,9 +3276,7 @@
             }
 
             if (!entries.length) {
-                errorMessage.textContent = "The analysis response was empty.";
-                errorCard.classList.add("visible");
-                resultContext = { mode: "single", type: "error" };
+                showError("The analysis response was empty.");
                 return;
             }
 
@@ -3414,15 +3475,12 @@
             }
 
             resultCard.classList.add("visible");
-            resultContext = { mode: "single", type: "result" };
         }
 
         function renderBatchResults(data) {
             clearResults();
             if (!data || !Array.isArray(data.bugs) || data.bugs.length === 0) {
-                errorMessage.textContent = "The Excel file did not contain any bug records.";
-                errorCard.classList.add("visible");
-                resultContext = { mode: "batch", type: "error" };
+                showError("The Excel file did not contain any bug records.");
                 return;
             }
 
@@ -3439,8 +3497,9 @@
 
                 const noticeText = document.createElement("div");
                 noticeText.className = "result-value";
-                noticeText.textContent =
-                    `${data.stopped_reason} The remaining bugs were not analyzed.`;
+                noticeText.textContent = data.retry_error
+                    ? `Retry failed: ${data.retry_error}`
+                    : `${data.stopped_reason} The remaining bugs were not analyzed.`;
 
                 notice.append(noticeLabel, noticeText);
 
@@ -3972,7 +4031,6 @@
                 resultGrid.appendChild(bugCard);
             });
             resultCard.classList.add("visible");
-            resultContext = { mode: "batch", type: "result" };
         }
 
         /*
@@ -3986,7 +4044,7 @@
                 return;
             }
 
-            clearResults();
+            setSavedResult("single", null);
 
             /*
              * FIX:
@@ -4033,6 +4091,9 @@
                 formData.append("screenshots", file);
             });
 
+            const abortController = new AbortController();
+            singleAbortController = abortController;
+
             singleAnalysisRunning = true;
             refreshAnalyzeButtons();
             runningAnalyses += 1;
@@ -4047,7 +4108,8 @@
             try {
                 const response = await fetch("/bugs/analyze", {
                     method: "POST",
-                    body: formData
+                    body: formData,
+                    signal: abortController.signal
                 });
 
                 let data;
@@ -4068,17 +4130,19 @@
                     throw data;
                 }
 
-                renderAnalysis(data);
+                setSavedResult("single", { type: "result", data });
 
             } catch (error) {
-                clearResults();
+                if (abortController.signal.aborted) {
+                    return;
+                }
 
-                errorMessage.textContent = formatError(error);
-
-                errorCard.classList.add("visible");
-                resultContext = { mode: "single", type: "error" };
+                setSavedResult("single", { type: "error", message: formatError(error) });
 
             } finally {
+                if (singleAbortController === abortController) {
+                    singleAbortController = null;
+                }
                 runningAnalyses -= 1;
                 singleAnalysisRunning = false;
                 refreshAnalyzeButtons();
@@ -4091,9 +4155,12 @@
          */
 
         clearButton.addEventListener("click", () => {
+            if (singleAbortController) {
+                singleAbortController.abort();
+            }
             bugForm.reset();
             clearValidation();
-            clearResults();
+            setSavedResult("single", null);
 
             // Clear screenshot
             selectedScreenshots = [];

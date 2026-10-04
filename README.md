@@ -50,6 +50,7 @@ Upload an `.xlsx`, `.xls` or `.csv` file to analyze many bugs at once.
 - **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
 - **Stops when Ollama goes away.** If Ollama becomes unreachable, the remaining bugs are marked **NOT ANALYZED** instead of each waiting for a timeout, and a **Retry not analyzed bugs** button analyzes only those once Ollama is back.
 - **Live progress** with elapsed time. Each browser tab tracks its own batch, so several batches can run at the same time; their requests take turns at Ollama.
+- **Can be cancelled.** Clear cancels a running analysis, and closing or reloading the page stops the batch on the server, so Ollama is not kept busy with results nobody sees.
 - **Summary** of analyzed, failed, duplicate and not analyzed bugs, with severity, priority and category counts.
 
 ### Service diagnosis
@@ -61,6 +62,7 @@ While the service is being checked or is unavailable, the analyze buttons are di
 ### Web interface
 
 - Results live only in the page, so leaving or reloading it during an analysis asks for confirmation first.
+- Single bug and batch results are kept separately, so both can run at once and switching modes shows each one's last result.
 - Light and dark themes; the choice is remembered in the browser.
 
 ---
