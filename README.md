@@ -66,6 +66,7 @@ While the service is being checked or is unavailable, the analyze buttons are di
 - Results live only in the page, so leaving or reloading it during an analysis asks for confirmation first.
 - Single bug and batch results are kept separately, so both can run at once and switching modes shows each one's last result.
 - Starting a single bug while a batch runs (or a batch while a single bug runs), in any tab, first shows a warning that it will wait for the other analysis, since Ollama handles one request at a time.
+- **Export Excel** downloads the result shown on screen as an `.xlsx` report. A single bug report holds the bug, its analysis and the test scenarios; a batch report has a summary sheet, one row per bug with its status (analyzed, failed, duplicate or not analyzed) and the reason, and a sheet of all test scenarios.
 - Light and dark themes; the choice is remembered in the browser when it allows site data.
 
 ---
@@ -145,6 +146,7 @@ app/
 │   ├── batch_analyzer.py    # Excel/CSV parsing, header detection, duplicates
 │   ├── excel_values.py      # Severity and priority value mapping
 │   ├── readability.py       # Unreadable, placeholder and identical-field checks
+│   ├── report.py            # Excel reports of the results
 │   └── steps.py             # Splitting steps to reproduce into steps
 ├── static/
 │   ├── css/styles.css       # Styles, light and dark theme
@@ -167,6 +169,8 @@ tests/                       # pytest suite (the LLM is mocked)
 | `POST` | `/bugs/batch/retry` | Analyze bugs again from an earlier batch result (JSON) |
 | `GET` | `/bugs/batch/{batch_id}/progress` | Progress of a running batch |
 | `GET` | `/bugs/activity` | Whether a single bug or batch analysis is running in any tab |
+| `POST` | `/bugs/export/single` | Excel report of a single bug result (JSON) |
+| `POST` | `/bugs/export/batch` | Excel report of a batch result (JSON) |
 | `GET` | `/health` | Application health |
 | `GET` | `/health/ollama` | Light check that Ollama and the model are available (no inference) |
 | `GET` | `/health/analysis` | Whether the analysis service is available |
@@ -244,7 +248,7 @@ The app is built to run **locally for a single user**:
 
 ## Future improvements
 
-- Persistent analysis history and report export
+- Persistent analysis history
 
 ---
 

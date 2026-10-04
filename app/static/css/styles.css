@@ -693,6 +693,51 @@ textarea.invalid {
     letter-spacing: -0.2px;
 }
 
+.result-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px 12px;
+    margin-bottom: 17px;
+}
+
+.result-card .result-card-header h2 {
+    margin: 0;
+}
+
+.export-button {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-secondary);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.export-button:hover:not(:disabled) {
+    border-color: var(--primary);
+    background: rgba(47, 109, 246, 0.08);
+}
+
+.export-button:disabled {
+    cursor: progress;
+    opacity: 0.6;
+}
+
+.export-error {
+    margin: -8px 0 14px;
+    color: var(--critical-text);
+    font-size: 13px;
+}
+
 .result-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

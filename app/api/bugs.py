@@ -1,9 +1,12 @@
+from datetime import datetime
 import logging
-from typing import Awaitable, Callable, Optional
+from pathlib import Path
+from typing import Annotated, Awaitable, Callable, Literal, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from pydantic import BaseModel, Field, field_validator
+from fastapi.responses import Response
+from pydantic import AfterValidator, BaseModel, Field
 
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
@@ -23,6 +26,7 @@ from app.services.batch_analyzer import (
 )
 from app.services.excel_values import map_priority, map_severity
 from app.services.readability import MAX_FIELD_CHARS
+from app.services.report import batch_report, single_report
 from app.services.steps import split_steps
 
 import asyncio
@@ -442,19 +446,22 @@ async def analyze_bug_batch(
     return await _run_batch(request, batch_id, lambda: parse_bug_spreadsheet(file))
 
 
+def _only_known_fields(values: dict[str, str]) -> dict[str, str]:
+    unknown = set(values) - set(SPREADSHEET_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown fields: {', '.join(sorted(unknown))}")
+    if any(len(value) > MAX_FIELD_CHARS for value in values.values()):
+        raise ValueError(f"values must be at most {MAX_FIELD_CHARS} characters")
+    return values
+
+
+# Bug values sent back by the page, from an earlier response.
+BugValues = Annotated[dict[str, str], AfterValidator(_only_known_fields)]
+
+
 class RetryBug(BaseModel):
     row: int
-    bug: dict[str, str]
-
-    @field_validator("bug")
-    @classmethod
-    def only_known_fields(cls, values: dict[str, str]) -> dict[str, str]:
-        unknown = set(values) - set(SPREADSHEET_FIELDS)
-        if unknown:
-            raise ValueError(f"unknown fields: {', '.join(sorted(unknown))}")
-        if any(len(value) > MAX_FIELD_CHARS for value in values.values()):
-            raise ValueError(f"values must be at most {MAX_FIELD_CHARS} characters")
-        return values
+    bug: BugValues
 
 
 class RetryRequest(BaseModel):
@@ -474,3 +481,61 @@ async def retry_bug_batch(retry: RetryRequest, request: Request):
         return [build_record(item.row, item.bug) for item in retry.bugs], {}
 
     return await _run_batch(request, retry.batch_id, load_records)
+
+
+# ---------------- Excel reports ----------------
+
+XLSX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+
+def _xlsx_response(content: bytes, name: str, exported_at: datetime) -> Response:
+    # Only plain characters, so the header needs no encoding.
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "-", name).strip("-")[:60] or "report"
+    filename = f"{safe_name}-{exported_at:%Y%m%d-%H%M}.xlsx"
+    return Response(
+        content=content,
+        media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+class SingleExportRequest(BaseModel):
+    bug: BugValues
+    analysis: BugAnalysis
+
+
+@router.post("/export/single")
+def export_single(export: SingleExportRequest) -> Response:
+    """Excel report of a single bug analysis shown on the page."""
+    exported_at = datetime.now()
+    content = single_report(export.bug, export.analysis, exported_at)
+    return _xlsx_response(content, "bug-analysis", exported_at)
+
+
+class ExportedBug(BaseModel):
+    row: int
+    status: Literal["analyzed", "failed", "duplicate", "not_analyzed"]
+    bug: BugValues
+    analysis: Optional[BugAnalysis] = None
+    error: Optional[str] = Field(default=None, max_length=2000)
+    duplicate_of: Optional[int] = None
+
+
+class BatchExportRequest(BaseModel):
+    source_name: Optional[str] = Field(default=None, max_length=255)
+    bugs: list[ExportedBug] = Field(min_length=1, max_length=MAX_BUG_RECORDS)
+
+
+@router.post("/export/batch")
+def export_batch(export: BatchExportRequest) -> Response:
+    """Excel report of a batch result shown on the page, all bugs included."""
+    exported_at = datetime.now()
+    content = batch_report(
+        [item.model_dump() | {"analysis": item.analysis} for item in export.bugs],
+        export.source_name,
+        exported_at,
+    )
+    stem = Path(export.source_name).stem if export.source_name else "batch"
+    return _xlsx_response(content, f"{stem}-analysis", exported_at)

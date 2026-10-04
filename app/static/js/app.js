@@ -12,6 +12,8 @@ const resultGrid = document.getElementById("resultGrid");
 const visualEvidenceSection = document.getElementById("visualEvidenceSection");
 const visualEvidenceValue = document.getElementById("visualEvidenceValue");
 const resultHeading = document.getElementById("resultHeading");
+const exportButton = document.getElementById("exportButton");
+const exportError = document.getElementById("exportError");
 
 const errorCard = document.getElementById("errorCard");
 const errorMessage = document.getElementById("errorMessage");
@@ -814,8 +816,9 @@ batchAnalyzeButton.addEventListener("click", async () => {
         if (abortController.signal.aborted) {
             return;
         }
-        currentBatchData = data;
-        setSavedResult("batch", { type: "result", data });
+        // The file name is used for the Excel report.
+        currentBatchData = { ...data, source_name: file.name };
+        setSavedResult("batch", { type: "result", data: currentBatchData });
         document.getElementById("batchProgress").hidden = false;
 
         // Bugs that failed because of Ollama may mean the service went
@@ -1147,6 +1150,8 @@ function clearResults() {
     resultCard.classList.remove("visible");
     resultGrid.innerHTML = "";
     resultHeading.textContent = "Analysis Result";
+    exportButton.hidden = true;
+    exportError.hidden = true;
 
     visualEvidenceSection.hidden = true;
     visualEvidenceValue.textContent = "";
@@ -1174,6 +1179,9 @@ function displaySavedResult(mode) {
     } else {
         renderBatchResults(saved.data);
     }
+
+    // Only a rendered result can be exported, not an error.
+    exportButton.hidden = !resultCard.classList.contains("visible");
 }
 
 // Keeps the result of a finished analysis and shows it only when its
@@ -2126,6 +2134,14 @@ bugForm.addEventListener("submit", async event => {
 
     setSavedResult("single", null);
 
+    const submittedBug = {
+        title: fields.bugTitle.input.value.trim(),
+        description: fields.description.input.value.trim(),
+        steps_to_reproduce: fields.stepsToReproduce.input.value.trim(),
+        expected_result: fields.expectedResult.input.value.trim(),
+        actual_result: fields.actualResult.input.value.trim()
+    };
+
     const formData = new FormData();
 
     formData.append(
@@ -2198,7 +2214,8 @@ bugForm.addEventListener("submit", async event => {
             throw data;
         }
 
-        setSavedResult("single", { type: "result", data });
+        // The values are kept with the result for the Excel report.
+        setSavedResult("single", { type: "result", data, bug: submittedBug });
 
     } catch (error) {
         if (abortController.signal.aborted) {
@@ -2460,3 +2477,74 @@ diagnosisRetryButton.addEventListener("click", refreshDiagnosis);
  */
 
 checkServiceStatus();
+
+/*
+ * Excel export
+ */
+
+// The file name the server chose, from the Content-Disposition header.
+function downloadName(response, fallback) {
+    const header = response.headers.get("Content-Disposition") || "";
+    const match = header.match(/filename="([^"]+)"/);
+    return match ? match[1] : fallback;
+}
+
+exportButton.addEventListener("click", async () => {
+    const mode = activeMode;
+    const saved = savedResults[mode];
+    if (!saved || saved.type !== "result") {
+        return;
+    }
+
+    const request = mode === "single"
+        ? { url: "/bugs/export/single", body: { bug: saved.bug, analysis: saved.data } }
+        : {
+            url: "/bugs/export/batch",
+            body: {
+                source_name: saved.data.source_name || null,
+                bugs: saved.data.bugs.map(bug => ({
+                    row: bug.row,
+                    status: bug.status,
+                    bug: bug.bug,
+                    analysis: bug.analysis,
+                    error: bug.error,
+                    duplicate_of: bug.duplicate_of
+                }))
+            }
+        };
+
+    exportButton.disabled = true;
+    exportError.hidden = true;
+
+    try {
+        const response = await fetch(request.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(request.body)
+        });
+
+        if (!response.ok) {
+            let detail;
+            try {
+                detail = await response.json();
+            } catch {
+                detail = `The report could not be created (HTTP ${response.status}).`;
+            }
+            throw detail;
+        }
+
+        const blob = await response.blob();
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = downloadName(response, "analysis-report.xlsx");
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    } catch (error) {
+        exportError.textContent = `Export failed: ${formatError(error)}`;
+        exportError.hidden = false;
+    } finally {
+        exportButton.disabled = false;
+    }
+});
