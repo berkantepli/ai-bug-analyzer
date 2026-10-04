@@ -285,7 +285,7 @@ priority must be exactly one of:
 - Low
 - Medium
 - High
--Critical
+- Critical
 
 Assign priority based on the importance of validating the
 specific scenario, not the overall bug severity.
