@@ -13,6 +13,7 @@ from app.services.llm_analyzer import (
     ContextTooLargeError,
     InvalidBugReportError,
     OllamaUnavailableError,
+    UnreadableScreenshotError,
     analyze_with_llm,
 )
 from app.services.batch_analyzer import (
@@ -312,6 +313,8 @@ async def analyze_bug(
         raise HTTPException(
             status_code=422, detail=f"Not a valid bug report: {error}"
         ) from error
+    except UnreadableScreenshotError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     except ContextTooLargeError as error:
         raise HTTPException(status_code=413, detail=str(error)) from error
     # Ollama unreachable, timeouts or an unusable LLM answer; the message is

@@ -286,3 +286,19 @@ def test_cancelled_request_waiting_for_its_turn_never_reaches_ollama(monkeypatch
     asyncio.run(cancel_the_second())
 
     assert prompts == ["first"]
+
+
+def test_damaged_screenshot_is_reported_as_unreadable(monkeypatch) -> None:
+    def rejected(request, timeout):
+        body = (
+            b'{"error":"{\\"error\\":{\\"code\\":400,\\"message\\":'
+            b'\\"Failed to load image or audio file\\"}}"}'
+        )
+        raise HTTPError(request.full_url, 400, "Bad Request", {}, BytesIO(body))
+
+    monkeypatch.setattr(llm_analyzer, "urlopen", rejected)
+
+    with pytest.raises(llm_analyzer.UnreadableScreenshotError) as error:
+        llm_analyzer._call_ollama({})
+
+    assert str(error.value).startswith("A screenshot could not be read")

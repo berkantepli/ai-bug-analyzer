@@ -2,7 +2,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.llm_analyzer import ContextTooLargeError, InvalidBugReportError
+from app.services.llm_analyzer import (
+    ContextTooLargeError,
+    InvalidBugReportError,
+    UnreadableScreenshotError,
+)
 from helpers import FAKE_ANALYSIS
 
 
@@ -192,3 +196,15 @@ def test_activity_reports_a_running_single_analysis(monkeypatch) -> None:
         "batch_running": False,
         "single_running": False,
     }
+
+
+def test_damaged_screenshot_is_a_user_error(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        raise UnreadableScreenshotError("A screenshot could not be read.")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    response = client.post("/bugs/analyze", data=VALID_BUG)
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "A screenshot could not be read."}

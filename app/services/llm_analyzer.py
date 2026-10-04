@@ -69,6 +69,10 @@ class ContextTooLargeError(RuntimeError):
     """The report and screenshots do not fit into the model's context window."""
 
 
+class UnreadableScreenshotError(RuntimeError):
+    """The model could not decode a screenshot, for example a damaged file."""
+
+
 class OllamaUnavailableError(RuntimeError):
     """Ollama could not be reached, did not answer in time or failed itself."""
 
@@ -341,6 +345,13 @@ def _call_ollama(payload: dict) -> dict:
             raise OllamaUnavailableError(
                 f"The model {OLLAMA_MODEL} is not installed in Ollama. "
                 f"Run: ollama pull {OLLAMA_MODEL}"
+            ) from error
+
+        # A file that starts like an image but is damaged or truncated.
+        if "Failed to load image" in error_body:
+            raise UnreadableScreenshotError(
+                "A screenshot could not be read; the file may be damaged or "
+                "incomplete. Save it again or remove it, then try again."
             ) from error
 
         if "exceed_context_size_error" in error_body:
