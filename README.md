@@ -213,7 +213,7 @@ The app is built to run **locally for a single user**:
 - Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, and a batch is processed bug by bug.
 - Very large screenshots use many tokens; if a report and its screenshots still do not fit into the context window, the analysis is rejected with a message asking for fewer screenshots or a shorter text.
 - Matching non-English Excel headers needs Ollama and adds a few seconds; if the LLM cannot match every required column, the file is rejected.
-- Formula cells are only read correctly if the file was saved by Excel (cached values).
+- Formula cells are read from the results Excel stores when it saves a file. Files written by scripts often contain formulas without results; such rows are marked as failed with a request to open and save the file in Excel. Formulas are not calculated by the app itself.
 - AI results are suggestions, not verified defects or confirmed root causes.
 
 ---
