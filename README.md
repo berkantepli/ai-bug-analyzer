@@ -33,6 +33,7 @@ Low-quality input is rejected with a clear reason instead of producing a mislead
 
 | Check | Example | Done by |
 |---|---|---|
+| Empty field or only spaces | A blank Expected Result | Backend, before the LLM |
 | Unreadable text | `Xq7#vL@`, `asdkj qweoiu`, `asdfasdf`, `aaaaaa` | Backend, before the LLM |
 | Placeholder text | `test test`, `lorem ipsum`, `n/a` | Backend, before the LLM |
 | Field longer than 5,000 characters | A pasted log file | Backend, before the LLM |
@@ -49,11 +50,18 @@ Upload an `.xlsx`, `.xls` or `.csv` file to analyze many bugs at once.
 - **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
 - **Stops when Ollama goes away.** If Ollama becomes unreachable, the remaining bugs are marked **NOT ANALYZED** instead of each waiting for a timeout, and a **Retry not analyzed bugs** button analyzes only those once Ollama is back.
 - **Live progress** with elapsed time. Each browser tab tracks its own batch, so several batches can run at the same time.
-- **Summary** of analyzed, failed and duplicate bugs, with severity, priority and category counts.
+- **Summary** of analyzed, failed, duplicate and not analyzed bugs, with severity, priority and category counts.
 
 ### Service diagnosis
 
 The page shows whether the analysis service is available and keeps it up to date: it notices when Ollama stops and switches back to available on its own when Ollama returns. A diagnosis view checks Ollama, the required model and a real inference call, and suggests a fix for each failing step.
+
+While the service is being checked or is unavailable, the analyze buttons are disabled; hovering over them shows why.
+
+### Web interface
+
+- Results live only in the page, so leaving or reloading it during an analysis asks for confirmation first.
+- Light and dark themes; the choice is remembered in the browser.
 
 ---
 
@@ -122,14 +130,15 @@ The model is forced to answer with JSON that matches a Pydantic schema, so every
 ```text
 app/
 ├── api/
-│   ├── bugs.py              # /bugs endpoints: single, batch, batch progress
+│   ├── bugs.py              # /bugs endpoints: single, batch, retry, progress
 │   └── health.py            # /health endpoints and service diagnosis
 ├── schemas/
 │   ├── analysis.py          # BugAnalysis result schema
 │   └── bug.py               # BugReportCreate input schema
 ├── services/
 │   ├── llm_analyzer.py      # Prompts and Ollama calls
-│   ├── batch_analyzer.py    # Excel parsing, header detection, duplicates
+│   ├── batch_analyzer.py    # Excel/CSV parsing, header detection, duplicates
+│   ├── excel_values.py      # Severity and priority value mapping
 │   └── readability.py       # Unreadable, placeholder and identical-field checks
 ├── static/images/logo.png
 ├── templates/index.html     # Web interface
@@ -207,13 +216,14 @@ The app is built to run **locally for a single user**:
 - Requests from other websites to the analysis endpoints are rejected, so a page open in your browser cannot start analyses in the background.
 - Uploads are limited in size and type, and Excel files are parsed with `defusedxml` to block XML bombs.
 - Text from Ollama and the model is escaped before it is shown in the page.
+- Unexpected errors return a generic message; the details are written only to the server log.
 - Bug reports can contain instructions aimed at the model (prompt injection). The prompts tell the model to ignore them, but analysis of reports written by others should not be trusted blindly.
 
 ---
 
 ## Limitations
 
-- Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, and a batch is processed bug by bug.
+- Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, so a large batch can take a long time.
 - Very large screenshots use many tokens; if a report and its screenshots still do not fit into the context window, the analysis is rejected with a message asking for fewer screenshots or a shorter text.
 - Matching non-English Excel headers needs Ollama and adds a few seconds; if the LLM cannot match every required column, the file is rejected.
 - Formula cells are read from the results Excel stores when it saves a file. Files written by scripts often contain formulas without results; such rows are marked as failed with a request to open and save the file in Excel. Formulas are not calculated by the app itself.
@@ -225,7 +235,6 @@ The app is built to run **locally for a single user**:
 
 - Jira and test management (Xray) integration
 - Persistent analysis history and report export
-- Clearer errors when Ollama is unavailable during single bug analysis
 
 ---
 
