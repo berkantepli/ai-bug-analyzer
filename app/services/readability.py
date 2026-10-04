@@ -35,14 +35,26 @@ PLACEHOLDER_TEXT_ERROR = "The bug report contains only placeholder text."
 
 KEYBOARD_ROWS = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
 KEYBOARD_SEQUENCE_LENGTH = 4
+# Sequences found in real words, such as "property", "liberty", German
+# "Wert" (value) or "strewn".
+REAL_WORD_SEQUENCES = {"erty", "wert", "trew"}
 KEYBOARD_SEQUENCES = {
     row[i : i + KEYBOARD_SEQUENCE_LENGTH]
     for keys in KEYBOARD_ROWS
     for row in (keys, keys[::-1])
     for i in range(len(row) - KEYBOARD_SEQUENCE_LENGTH + 1)
-}
+} - REAL_WORD_SEQUENCES
 
 CONSONANT_RUN = re.compile(r"[bcdfghjklmnpqrstvwxz]{5,}")
+# Letter groups that sound like one consonant, so "Deutschland" or
+# "strengths" are not mistaken for random letters.
+CONSONANT_DIGRAPHS = (("sch", "s"), ("ch", "c"), ("th", "t"), ("sh", "s"), ("ph", "p"), ("ck", "k"), ("gh", "g"))
+
+# Technical tokens such as URLs, paths, e-mail addresses, versions, log
+# fields and class names are split into parts at these characters.
+# URL parts the letter checks would reject.
+URL_WORDS = {"https", "www"}
+TECHNICAL_SEPARATORS = re.compile(r"[/\\.:_=@\-\[\](){}<>,;\"']+")
 REPEATED_LETTER = re.compile(r"(\w)\1\1")
 MAX_ACRONYM_LENGTH = 6
 
@@ -124,9 +136,41 @@ def _is_word(token: str) -> bool:
         return True
 
     lowered = token.lower()
-    if REPEATED_LETTER.search(lowered) or CONSONANT_RUN.search(lowered):
+    consonants = lowered
+    for digraph, sound in CONSONANT_DIGRAPHS:
+        consonants = consonants.replace(digraph, sound)
+    if REPEATED_LETTER.search(lowered) or CONSONANT_RUN.search(consonants):
         return False
     return not any(sequence in lowered for sequence in KEYBOARD_SEQUENCES)
+
+
+def _is_word_part(part: str) -> bool:
+    """A part of a technical token: a word, a number, or a short code such as
+    v2, 500ms, IPv6, 04T13 or Android14."""
+    if part.lower() in URL_WORDS or _is_word(part):
+        return True
+    letters = sum(char.isalpha() for char in part)
+    if not part.isalnum() or not any(char.isdigit() for char in part):
+        return False
+    if letters <= 3:
+        return True
+    prefix = re.fullmatch(r"([^\W\d_]+)\d+", part)
+    return prefix is not None and _is_word(prefix.group(1))
+
+
+def _is_technical(token: str) -> bool:
+    """URLs, paths, e-mails, versions, timestamps, log fields, class names."""
+    parts = [part for part in TECHNICAL_SEPARATORS.split(token) if part]
+    return bool(parts) and all(_is_word_part(part) for part in parts)
+
+
+def _counts_as_word(token: str) -> bool:
+    return _is_word(token) or _is_technical(_strip(token))
+
+
+def _is_punctuation(token: str) -> bool:
+    """Separators such as "-", "->" or "|" are neither words nor noise."""
+    return not any(char.isalnum() for char in token)
 
 
 def readability_error(values: dict[str, str]) -> Optional[str]:
@@ -142,8 +186,11 @@ def readability_error(values: dict[str, str]) -> Optional[str]:
     ):
         return PLACEHOLDER_TEXT_ERROR
 
-    words = sum(_is_word(token) for token in tokens)
-    if words / len(tokens) < MIN_READABLE_WORD_RATIO:
+    counted = [token for token in tokens if not _is_punctuation(token)]
+    if not counted:
+        return UNREADABLE_TEXT_ERROR
+    words = sum(_counts_as_word(token) for token in counted)
+    if words / len(counted) < MIN_READABLE_WORD_RATIO:
         return UNREADABLE_TEXT_ERROR
 
     return None

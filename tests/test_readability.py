@@ -47,6 +47,26 @@ def report(title, description, expected, actual) -> dict:
             "API returns 500 on GET /api/v1/users?id=12",
         ),
         report("Bug", "It does not work.", "It works", "It does not work"),
+        report(
+            "Orders API returns 401",
+            "2026-10-04T13:01:22.481Z ERROR [http-nio-8080-exec-3] c.e.a.AuthFilter: "
+            "token=eyJhbGciOiJIUzI1NiJ9 expired_at=1759572000 user_id=48213 "
+            "ip=10.0.3.17 path=/api/v2/orders/9912 trace_id=7f3a9c2e -> 401 (12ms)",
+            "200 OK",
+            "401 Unauthorized",
+        ),
+        report(
+            "Property page shows wrong value",
+            "In Deutschland the Wert field and the strengths list are empty.",
+            "Values appear",
+            "Fields are empty",
+        ),
+        report(
+            "Link broken",
+            "https://www.example.com/help -> 404 | user@example.com | v2.3.1",
+            "Help page opens",
+            "ERR_CONNECTION_REFUSED on Android14 (IPv6)",
+        ),
     ],
 )
 def test_real_reports_are_readable(values) -> None:

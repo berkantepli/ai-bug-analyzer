@@ -40,7 +40,7 @@ Low-quality input is rejected with a clear reason instead of producing a mislead
 | Same text in two or more fields | Expected result = actual result | Backend, before the LLM |
 | Not a meaningful bug report | Nonsense sentences, a cake recipe | LLM |
 
-Short or vague reports about real software behavior (for example "It does not work") are still analyzed, with low confidence and a list of missing information.
+Short or vague reports about real software behavior (for example "It does not work") are still analyzed, with low confidence and a list of missing information. Logs, stack traces, URLs, versions and error codes count as readable text.
 
 ### Batch analysis (Excel and CSV)
 
