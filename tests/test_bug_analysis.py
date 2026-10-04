@@ -174,3 +174,21 @@ def test_unexpected_errors_are_returned_as_json(monkeypatch) -> None:
     assert response.json() == {
         "detail": "Unexpected server error. The details are in the server log."
     }
+
+
+def test_activity_reports_a_running_single_analysis(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        seen["during"] = client.get("/bugs/activity").json()
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    client.post("/bugs/analyze", data=VALID_BUG)
+
+    assert seen["during"] == {"batch_running": False, "single_running": True}
+    assert client.get("/bugs/activity").json() == {
+        "batch_running": False,
+        "single_running": False,
+    }

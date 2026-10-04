@@ -111,6 +111,20 @@ BATCH_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,100}")
 batch_progress: dict[str, dict] = {}
 
 
+# Single bug analyses running in any tab; see get_activity.
+running_single_analyses = 0
+
+
+@router.get("/activity")
+def get_activity():
+    """What is running in any tab. Ollama analyzes one request at a time, so
+    the page tells the user when a new analysis has to wait for another."""
+    return {
+        "batch_running": bool(batch_progress),
+        "single_running": running_single_analyses > 0,
+    }
+
+
 @router.get("/batch/{batch_id}/progress")
 def get_batch_progress(batch_id: str):
     progress = batch_progress.get(batch_id)
@@ -287,6 +301,9 @@ async def analyze_bug(
 
     bug = to_bug_report(values)
 
+    global running_single_analyses
+    running_single_analyses += 1
+
     stopped = asyncio.Event()
     watcher = asyncio.ensure_future(_stop_when_disconnected(request, stopped))
     try:
@@ -305,6 +322,7 @@ async def analyze_bug(
         ) from error
     finally:
         watcher.cancel()
+        running_single_analyses -= 1
 
     if analysis is None:
         # Nobody receives this; the page was closed or the analysis cleared.

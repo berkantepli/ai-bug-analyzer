@@ -716,3 +716,20 @@ def test_closed_page_stops_the_analysis() -> None:
         return stopped.is_set()
 
     assert asyncio.run(watch())
+
+
+def test_activity_reports_a_running_batch(monkeypatch) -> None:
+    seen = {}
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        seen["during"] = client.get("/bugs/activity").json()
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    row = ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error")
+    client.post(
+        "/bugs/batch", files={"file": ("bugs.xlsx", excel_bytes([HEADER, row]))}
+    )
+
+    assert seen["during"] == {"batch_running": True, "single_running": False}

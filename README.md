@@ -63,6 +63,7 @@ While the service is being checked or is unavailable, the analyze buttons are di
 
 - Results live only in the page, so leaving or reloading it during an analysis asks for confirmation first.
 - Single bug and batch results are kept separately, so both can run at once and switching modes shows each one's last result.
+- Starting a single bug while a batch runs (or a batch while a single bug runs), in any tab, first shows a warning that it will wait for the other analysis, since Ollama handles one request at a time.
 - Light and dark themes; the choice is remembered in the browser.
 
 ---
@@ -159,6 +160,7 @@ tests/                       # pytest suite (the LLM is mocked)
 | `POST` | `/bugs/batch` | Analyze an Excel or CSV file (`file`, optional `batch_id`) |
 | `POST` | `/bugs/batch/retry` | Analyze bugs again from an earlier batch result (JSON) |
 | `GET` | `/bugs/batch/{batch_id}/progress` | Progress of a running batch |
+| `GET` | `/bugs/activity` | Whether a single bug or batch analysis is running in any tab |
 | `GET` | `/health` | Application health |
 | `GET` | `/health/ollama` | Light check that Ollama and the model are available (no inference) |
 | `GET` | `/health/analysis` | Whether the analysis service is available |
