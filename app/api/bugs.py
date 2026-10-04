@@ -1,7 +1,8 @@
+import logging
 from typing import Awaitable, Callable, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.analysis import BugAnalysis
@@ -27,6 +28,8 @@ import re
 
 
 router = APIRouter(prefix="/bugs", tags=["bugs"])
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_worker_count(bug_count: int) -> int:
@@ -132,14 +135,16 @@ def to_bug_report(values: dict[str, str]) -> BugReportCreate:
 
 
 async def _analyze_unless_stopped(
-    bug: BugReportCreate, stopped: asyncio.Event
+    bug: BugReportCreate,
+    stopped: asyncio.Event,
+    screenshots: Optional[list[UploadFile]] = None,
 ) -> Optional[BugAnalysis]:
-    """Analyze the bug, or return None as soon as the batch is stopped.
+    """Analyze the bug, or return None as soon as the analysis is stopped.
 
     Without this, analyses already waiting on a hung Ollama would each wait
     for the full timeout after the first one has failed.
     """
-    analysis = asyncio.ensure_future(analyze_with_llm(bug))
+    analysis = asyncio.ensure_future(analyze_with_llm(bug, screenshots))
     stop = asyncio.ensure_future(stopped.wait())
     try:
         await asyncio.wait({analysis, stop}, return_when=asyncio.FIRST_COMPLETED)
@@ -151,6 +156,24 @@ async def _analyze_unless_stopped(
 
     analysis.cancel()
     return None
+
+
+# How often a running analysis checks whether the page is still waiting.
+DISCONNECT_CHECK_SECONDS = 1
+
+
+async def _stop_when_disconnected(request: Request, stopped: asyncio.Event) -> None:
+    """Stop the analysis when the page that started it is closed or reloaded.
+
+    The server would otherwise keep Ollama busy with results nobody sees,
+    possibly for hours with a large batch.
+    """
+    while not stopped.is_set():
+        if await request.is_disconnected():
+            logger.info("Client disconnected; stopping %s", request.url.path)
+            stopped.set()
+            return
+        await asyncio.sleep(DISCONNECT_CHECK_SECONDS)
 
 
 async def process_batch_record(
@@ -240,6 +263,7 @@ async def process_batch_record(
 
 @router.post("/analyze", response_model=BugAnalysis)
 async def analyze_bug(
+    request: Request,
     title: str = Form(...),
     description: str = Form(...),
     steps_to_reproduce: str = Form(...),
@@ -263,11 +287,10 @@ async def analyze_bug(
 
     bug = to_bug_report(values)
 
+    stopped = asyncio.Event()
+    watcher = asyncio.ensure_future(_stop_when_disconnected(request, stopped))
     try:
-        return await analyze_with_llm(
-            bug,
-            screenshots,
-        )
+        analysis = await _analyze_unless_stopped(bug, stopped, screenshots)
     except InvalidBugReportError as error:
         raise HTTPException(
             status_code=422, detail=f"Not a valid bug report: {error}"
@@ -280,9 +303,17 @@ async def analyze_bug(
         raise HTTPException(
             status_code=503, detail=f"The LLM could not analyze this bug: {error}"
         ) from error
+    finally:
+        watcher.cancel()
+
+    if analysis is None:
+        # Nobody receives this; the page was closed or the analysis cleared.
+        raise HTTPException(status_code=499, detail="The request was cancelled.")
+    return analysis
 
 
 async def _run_batch(
+    request: Request,
     batch_id: Optional[str],
     load_records: Callable[[], Awaitable[tuple[list[dict], dict]]],
 ) -> dict:
@@ -332,12 +363,20 @@ async def _run_batch(
         semaphore = asyncio.Semaphore(worker_count)
         batch_state = {"ollama_error": None, "stopped": asyncio.Event()}
 
-        results = await asyncio.gather(
-            *(
-                process_batch_record(record, semaphore, progress, batch_state)
-                for record in records
-            )
+        # Closing or reloading the page stops the batch like an Ollama
+        # failure: bugs not started yet are not sent.
+        watcher = asyncio.ensure_future(
+            _stop_when_disconnected(request, batch_state["stopped"])
         )
+        try:
+            results = await asyncio.gather(
+                *(
+                    process_batch_record(record, semaphore, progress, batch_state)
+                    for record in records
+                )
+            )
+        finally:
+            watcher.cancel()
 
         failed = sum(result["status"] == "failed" for result in results)
         not_analyzed = sum(result["status"] == "not_analyzed" for result in results)
@@ -372,10 +411,11 @@ async def _run_batch(
 
 @router.post("/batch")
 async def analyze_bug_batch(
+    request: Request,
     file: UploadFile = File(...),
     batch_id: Optional[str] = Form(None),
 ):
-    return await _run_batch(batch_id, lambda: parse_bug_spreadsheet(file))
+    return await _run_batch(request, batch_id, lambda: parse_bug_spreadsheet(file))
 
 
 class RetryBug(BaseModel):
@@ -399,7 +439,7 @@ class RetryRequest(BaseModel):
 
 
 @router.post("/batch/retry")
-async def retry_bug_batch(request: RetryRequest):
+async def retry_bug_batch(retry: RetryRequest, request: Request):
     """Analyze bugs again, typically those not analyzed when Ollama stopped.
 
     The values come from an earlier batch response, so the Excel file does
@@ -407,6 +447,6 @@ async def retry_bug_batch(request: RetryRequest):
     """
 
     async def load_records() -> tuple[list[dict], dict]:
-        return [build_record(item.row, item.bug) for item in request.bugs], {}
+        return [build_record(item.row, item.bug) for item in retry.bugs], {}
 
-    return await _run_batch(request.batch_id, load_records)
+    return await _run_batch(request, retry.batch_id, load_records)

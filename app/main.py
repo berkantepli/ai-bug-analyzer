@@ -5,6 +5,8 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.bugs import router as bugs_router
 from app.api.health import router as health_router
@@ -37,25 +39,38 @@ async def unexpected_error(request: Request, error: Exception) -> JSONResponse:
 PROTECTED_PATH_PREFIXES = ("/bugs", "/health/analysis")
 
 
-@app.middleware("http")
-async def reject_cross_site_requests(request: Request, call_next):
-    if request.url.path.startswith(PROTECTED_PATH_PREFIXES):
-        # Browsers label every request with where it came from; API clients
-        # such as curl send neither header and are not affected.
-        fetch_site = request.headers.get("sec-fetch-site")
-        origin = request.headers.get("origin")
-        from_other_site = fetch_site in ("cross-site", "same-site")
-        foreign_origin = (
-            origin is not None
-            and urlsplit(origin).netloc != request.headers.get("host")
-        )
-        if from_other_site or foreign_origin:
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "Requests from other websites are not allowed."},
-            )
+class RejectCrossSiteRequests:
+    """Plain ASGI middleware: unlike @app.middleware("http"), it lets the
+    endpoints notice when the page closes the connection."""
 
-    return await call_next(request)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["path"].startswith(
+            PROTECTED_PATH_PREFIXES
+        ):
+            # Browsers label every request with where it came from; API
+            # clients such as curl send neither header and are not affected.
+            headers = Headers(scope=scope)
+            fetch_site = headers.get("sec-fetch-site")
+            origin = headers.get("origin")
+            from_other_site = fetch_site in ("cross-site", "same-site")
+            foreign_origin = (
+                origin is not None and urlsplit(origin).netloc != headers.get("host")
+            )
+            if from_other_site or foreign_origin:
+                response = JSONResponse(
+                    status_code=403,
+                    content={"detail": "Requests from other websites are not allowed."},
+                )
+                await response(scope, receive, send)
+                return
+
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(RejectCrossSiteRequests)
 
 
 app.include_router(bugs_router)

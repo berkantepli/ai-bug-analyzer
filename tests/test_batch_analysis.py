@@ -701,3 +701,18 @@ def test_concurrent_batches_keep_separate_progress(monkeypatch) -> None:
     assert progress_while_both_ran["tab-b"]["total"] == 3
     assert progress_while_both_ran["tab-b"]["failed"] == 1
     assert bugs.batch_progress == {}
+
+
+def test_closed_page_stops_the_analysis() -> None:
+    class ClosedRequest:
+        url = type("Url", (), {"path": "/bugs/batch"})()
+
+        async def is_disconnected(self) -> bool:
+            return True
+
+    async def watch() -> bool:
+        stopped = asyncio.Event()
+        await bugs._stop_when_disconnected(ClosedRequest(), stopped)
+        return stopped.is_set()
+
+    assert asyncio.run(watch())
