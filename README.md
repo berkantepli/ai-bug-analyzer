@@ -60,6 +60,7 @@ The page shows whether the analysis service is available and keeps it up to date
 ## Excel format
 
 - The file must contain **a single sheet**; only the active sheet is read.
+- Password-protected files cannot be read; remove the password first.
 - Limits: at most **5 MB**, **2000 rows** in the sheet and **500 bug records**.
 - The header row may be anywhere in the **first 20 rows**, so report titles or notes can sit above it.
 - The English headers below are recognized directly (case and punctuation do not matter). Headers in other languages or with other names (for example `Başlık`, `Beschreibung`) are matched by the LLM, which needs Ollama; the matching is shown above the results so it can be checked:

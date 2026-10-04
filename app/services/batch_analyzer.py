@@ -137,6 +137,15 @@ def _unsaved_formula_cells(
         workbook.close()
 
 
+# Encrypted Office files are OLE containers, not the zip of a normal .xlsx.
+OLE_SIGNATURE = b"\xd0\xcf\x11\xe0"
+
+PASSWORD_PROTECTED_ERROR = (
+    "The Excel file is password-protected. Remove the password, save the "
+    "file and upload it again."
+)
+
+
 def _xls_cell_value(workbook: xlrd.book.Book, cell: xlrd.sheet.Cell) -> object:
     if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK, xlrd.XL_CELL_ERROR):
         return None
@@ -367,6 +376,12 @@ async def parse_bug_spreadsheet(
             detail=f"The Excel file is larger than {MAX_EXCEL_BYTES // (1024 * 1024)} MB.",
         )
 
+    if not content:
+        raise HTTPException(status_code=422, detail="The uploaded file is empty.")
+
+    if filename.endswith(".xlsx") and content.startswith(OLE_SIGNATURE):
+        raise HTTPException(status_code=422, detail=PASSWORD_PROTECTED_ERROR)
+
     too_many_rows = HTTPException(
         status_code=422,
         detail=f"The Excel sheet has more than {MAX_SHEET_ROWS} rows.",
@@ -407,6 +422,14 @@ async def parse_bug_spreadsheet(
             )
     except HTTPException:
         raise
+    except xlrd.biffh.XLRDError as exc:
+        if "encrypted" in str(exc).lower():
+            raise HTTPException(
+                status_code=422, detail=PASSWORD_PROTECTED_ERROR
+            ) from exc
+        raise HTTPException(
+            status_code=422, detail="The uploaded Excel file could not be read."
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=422, detail="The uploaded Excel file could not be read."
