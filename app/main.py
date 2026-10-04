@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -80,7 +81,22 @@ app.include_router(bugs_router)
 app.include_router(health_router)
 
 
+# The page's CSS and JavaScript URLs carry the file's modification time, so
+# a browser loads a changed file instead of reusing its cached copy.
+STATIC_ASSET = re.compile(r'"/static/((?:css|js)/[^"?]+)"')
+
+
+def _with_asset_versions(html: str) -> str:
+    def add_version(match: re.Match) -> str:
+        asset = APP_DIR / "static" / match.group(1)
+        if not asset.is_file():
+            return match.group(0)
+        return f'"/static/{match.group(1)}?v={int(asset.stat().st_mtime)}"'
+
+    return STATIC_ASSET.sub(add_version, html)
+
+
 @app.get("/", response_class=HTMLResponse)
 def home() -> str:
     html_path = APP_DIR / "templates" / "index.html"
-    return html_path.read_text(encoding="utf-8")
+    return _with_asset_versions(html_path.read_text(encoding="utf-8"))

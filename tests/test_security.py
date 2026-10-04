@@ -1,4 +1,5 @@
 import asyncio
+import re
 from io import BytesIO
 from urllib.error import HTTPError
 
@@ -229,3 +230,10 @@ def test_retry_accepts_only_known_fields_of_limited_length(bug) -> None:
     response = client.post("/bugs/batch/retry", json={"bugs": [{"row": 2, "bug": bug}]})
 
     assert response.status_code == 422
+
+
+def test_page_assets_are_versioned_so_updates_are_not_cached() -> None:
+    html = client.get("/").text
+
+    assert re.search(r'/static/js/app\.js\?v=\d+"', html)
+    assert re.search(r'/static/css/styles\.css\?v=\d+"', html)
