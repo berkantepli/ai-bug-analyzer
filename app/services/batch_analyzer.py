@@ -3,7 +3,7 @@ from datetime import date, datetime, time
 from io import BytesIO, StringIO
 from itertools import islice
 import re
-from typing import Optional
+from typing import Iterable, Iterator, Optional
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
@@ -81,6 +81,9 @@ COLUMN_SAMPLE_CHARS = 80
 # the LLM busy for hours.
 MAX_EXCEL_BYTES = 5 * 1024 * 1024
 MAX_SHEET_ROWS = 2000
+# Rows read in total, including empty rows that only carry formatting such
+# as borders or colors; keeps a small file from expanding without limit.
+MAX_SCANNED_ROWS = 50000
 MAX_BUG_RECORDS = 500
 
 
@@ -157,7 +160,7 @@ PASSWORD_PROTECTED_ERROR = (
 )
 
 
-def _csv_rows(content: bytes) -> list[tuple[object, ...]]:
+def _csv_rows(content: bytes) -> Iterator[tuple[object, ...]]:
     """Read a CSV export, guessing the encoding and the delimiter."""
     for encoding in ("utf-8-sig", "cp1254"):
         try:
@@ -173,12 +176,46 @@ def _csv_rows(content: bytes) -> list[tuple[object, ...]]:
     except csv.Error:
         dialect = csv.excel
 
-    rows = []
-    for row in csv.reader(StringIO(text), dialect):
-        rows.append(tuple(row))
-        if len(rows) > MAX_SHEET_ROWS:
-            break
-    return rows
+    return (tuple(row) for row in csv.reader(StringIO(text), dialect))
+
+
+def _read_rows(
+    rows: Iterable[tuple[object, ...]], file_type: str
+) -> list[tuple[object, ...]]:
+    """Read the sheet rows, counting only rows that contain data.
+
+    Tables are often formatted far below their data, which leaves empty rows
+    in the file; they do not count towards the row limit, and trailing ones
+    are dropped. Empty rows inside the data are kept for the row numbers.
+    """
+    result = []
+    filled = 0
+    for row in islice(rows, MAX_SCANNED_ROWS + 1):
+        result.append(row)
+        if any(_cell_text(value) for value in row):
+            filled += 1
+            if filled > MAX_SHEET_ROWS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"The {file_type} file has more than {MAX_SHEET_ROWS} "
+                        "rows with data."
+                    ),
+                )
+
+    if len(result) > MAX_SCANNED_ROWS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"The {file_type} file has more than {MAX_SCANNED_ROWS} rows, "
+                "including empty formatted rows. Delete the unused rows below "
+                "the data and try again."
+            ),
+        )
+
+    while result and not any(_cell_text(value) for value in result[-1]):
+        result.pop()
+    return result
 
 
 def _xls_cell_value(workbook: xlrd.book.Book, cell: xlrd.sheet.Cell) -> object:
@@ -442,37 +479,33 @@ async def parse_bug_spreadsheet(file: UploadFile) -> tuple[list[dict], dict]:
         raise HTTPException(status_code=422, detail=PASSWORD_PROTECTED_ERROR)
 
     hidden_rows: frozenset[int] = frozenset()
-    too_many_rows = HTTPException(
-        status_code=422,
-        detail=f"The {file_type} file has more than {MAX_SHEET_ROWS} rows.",
-    )
     try:
         if filename.endswith(".xlsx"):
             workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
             try:
-                rows = [
-                    tuple(
-                        _format_cell(cell.value, cell.number_format or "General")
-                        for cell in row
-                    )
-                    for row in islice(
-                        workbook.active.iter_rows(min_row=1), MAX_SHEET_ROWS + 1
-                    )
-                ]
+                rows = _read_rows(
+                    (
+                        tuple(
+                            _format_cell(cell.value, cell.number_format or "General")
+                            for cell in row
+                        )
+                        for row in workbook.active.iter_rows(min_row=1)
+                    ),
+                    file_type,
+                )
             finally:
                 workbook.close()
-            if len(rows) > MAX_SHEET_ROWS:
-                raise too_many_rows
             unsaved_formulas, hidden_rows = _xlsx_sheet_details(content, rows)
         elif filename.endswith(".xls"):
             workbook = xlrd.open_workbook(file_contents=content, formatting_info=True)
             sheet = workbook.sheet_by_index(0)
-            if sheet.nrows > MAX_SHEET_ROWS:
-                raise too_many_rows
-            rows = [
-                tuple(_xls_cell_value(workbook, cell) for cell in sheet.row(index))
-                for index in range(sheet.nrows)
-            ]
+            rows = _read_rows(
+                (
+                    tuple(_xls_cell_value(workbook, cell) for cell in sheet.row(index))
+                    for index in range(sheet.nrows)
+                ),
+                file_type,
+            )
             # xlrd only exposes saved formula results, not the formulas.
             unsaved_formulas = frozenset()
             hidden_rows = frozenset(
@@ -481,9 +514,7 @@ async def parse_bug_spreadsheet(file: UploadFile) -> tuple[list[dict], dict]:
                 if info.hidden
             )
         elif filename.endswith(".csv"):
-            rows = _csv_rows(content)
-            if len(rows) > MAX_SHEET_ROWS:
-                raise too_many_rows
+            rows = _read_rows(_csv_rows(content), file_type)
             unsaved_formulas = frozenset()
         else:
             raise HTTPException(

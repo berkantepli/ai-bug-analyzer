@@ -3,6 +3,7 @@ from io import BytesIO
 import pytest
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
+from openpyxl.styles import Border, Side
 
 from app.main import app
 from helpers import FAKE_ANALYSIS, HEADER
@@ -108,3 +109,30 @@ def test_csv_messages_name_the_csv_file() -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"].startswith("Missing required CSV columns:")
+
+
+def test_empty_formatted_rows_do_not_count_towards_the_row_limit(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.batch_analyzer.MAX_SHEET_ROWS", 3)
+    workbook = Workbook()
+    sheet = workbook.active
+    for row in (HEADER, LOGIN, LOGOUT):
+        sheet.append(row)
+    # Borders drawn far below the data, as in a formatted table.
+    for row_number in range(4, 40):
+        sheet.cell(row=row_number, column=1).border = Border(top=Side(style="thin"))
+    output = BytesIO()
+    workbook.save(output)
+
+    response = post("bugs.xlsx", output.getvalue())
+
+    assert response.status_code == 200
+    assert [bug["row"] for bug in response.json()["bugs"]] == [2, 3]
+
+
+def test_csv_blank_lines_do_not_count_towards_the_row_limit(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.batch_analyzer.MAX_SHEET_ROWS", 3)
+    content = ",".join(HEADER) + "\n" + ",".join(LOGIN) + "\n" + "\n" * 20
+
+    response = post("bugs.csv", content.encode())
+
+    assert response.status_code == 200

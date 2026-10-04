@@ -74,7 +74,7 @@ While the service is being checked or is unavailable, the analyze buttons are di
 - CSV files may use commas, semicolons or tabs, in UTF-8 or Windows Turkish (cp1254) encoding.
 - Hidden rows, including rows hidden by a filter, are skipped; the number of skipped rows is shown above the results.
 - Password-protected files cannot be read; remove the password first.
-- Limits: at most **5 MB**, **2000 rows** in the sheet and **500 bug records**.
+- Limits: at most **5 MB**, **2000 rows with data** in the sheet (empty formatted rows below the data are ignored) and **500 bug records**.
 - The header row may be anywhere in the **first 20 rows**, so report titles or notes can sit above it.
 - The English headers below are recognized directly (case and punctuation do not matter). Headers in other languages or with other names (for example `Başlık`, `Beschreibung`) are matched by the LLM, which needs Ollama; the matching is shown above the results so it can be checked:
 
