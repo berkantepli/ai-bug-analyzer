@@ -58,13 +58,15 @@ For each bug:
 |---|---|
 | **Severity** | `LOW`, `MEDIUM`, `HIGH` or `CRITICAL` |
 | **Priority** | `P1` (most urgent) to `P4` |
-| **Category** | The functional area, from a fixed list such as Authentication, User Interface, Search or Checkout and Payment |
+| **Category** | The functional area, from a fixed list (see below) |
 | **Impact** | What the bug means for users or the business |
 | **Possible Root Cause** | A likely cause, as a hypothesis |
 | **Suggested Test Scenarios** | Tests to verify the fix, with type and priority |
 | **Missing Information** | What the report should add to make the bug easier to investigate |
 | **Confidence** | How sure the analysis is (0–100%) |
 | **Visual Evidence** | What the screenshots show (only when screenshots are added) |
+
+The AI picks the category from this list, in English for reports in any language: Authentication, Authorization, User Interface, Forms and Input, Navigation, Search, Checkout and Payment, File Upload and Download, Notifications and Email, Data and Storage, API and Integration, Reporting and Export, Performance, Stability and Crashes, Security, Accessibility, Localization, Compatibility, Settings and Configuration, and Other. A Category column in your file is used as written instead.
 
 A batch result also shows a summary: how many bugs were analyzed, failed or repeated, and how they split by severity, priority and category.
 
