@@ -221,3 +221,16 @@ def test_ollama_server_error_is_reported_as_unavailable(monkeypatch) -> None:
         llm_analyzer._call_ollama({})
 
     assert str(error.value) == "Ollama returned HTTP 500."
+
+
+def test_missing_model_is_reported_as_unavailable(monkeypatch) -> None:
+    def missing(request, timeout):
+        body = b'{"error":"model \'qwen3-vl:8b-instruct\' not found"}'
+        raise HTTPError(request.full_url, 404, "Not Found", {}, BytesIO(body))
+
+    monkeypatch.setattr(llm_analyzer, "urlopen", missing)
+
+    with pytest.raises(llm_analyzer.OllamaUnavailableError) as error:
+        llm_analyzer._call_ollama({})
+
+    assert "is not installed in Ollama. Run: ollama pull" in str(error.value)

@@ -334,6 +334,14 @@ def _call_ollama(payload: dict) -> dict:
         error_body = error.read().decode("utf-8", errors="replace")
         logger.warning("Ollama returned HTTP %s: %s", error.code, error_body)
 
+        # The model was removed or never pulled; every request fails the
+        # same way until it is installed.
+        if error.code == 404 and "not found" in error_body:
+            raise OllamaUnavailableError(
+                f"The model {OLLAMA_MODEL} is not installed in Ollama. "
+                f"Run: ollama pull {OLLAMA_MODEL}"
+            ) from error
+
         if "exceed_context_size_error" in error_body:
             raise ContextTooLargeError(
                 "The report and screenshots are too long for the model to "
