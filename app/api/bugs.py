@@ -38,17 +38,6 @@ router = APIRouter(prefix="/bugs", tags=["bugs"])
 logger = logging.getLogger(__name__)
 
 
-def calculate_worker_count(bug_count: int) -> int:
-    if bug_count <= 10:
-        return 1
-    elif bug_count <= 50:
-        return 2
-    elif bug_count <= 200:
-        return 3
-    else:
-        return 4
-
-
 MAX_SCREENSHOTS = 5
 MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024
 
@@ -194,7 +183,6 @@ async def _stop_when_disconnected(request: Request, stopped: asyncio.Event) -> N
 
 async def process_batch_record(
     record: dict,
-    semaphore: asyncio.Semaphore,
     progress: dict,
     batch_state: dict,
 ) -> dict:
@@ -229,15 +217,14 @@ async def process_batch_record(
     try:
         bug = to_bug_report(values)
 
-        async with semaphore:
-            # Once Ollama is unreachable, the remaining bugs are not sent:
-            # each one would fail the same way or wait for the full timeout.
-            if stopped.is_set():
-                return not_analyzed()
+        # Once Ollama is unreachable, the remaining bugs are not sent:
+        # each one would fail the same way or wait for the full timeout.
+        if stopped.is_set():
+            return not_analyzed()
 
-            analysis = await _analyze_unless_stopped(bug, stopped)
-            if analysis is None:
-                return not_analyzed()
+        analysis = await _analyze_unless_stopped(bug, stopped)
+        if analysis is None:
+            return not_analyzed()
 
     except OllamaUnavailableError as error:
         if not stopped.is_set():
@@ -386,9 +373,6 @@ async def _run_batch(
             duplicates=duplicates,
         )
 
-        worker_count = calculate_worker_count(total)
-
-        semaphore = asyncio.Semaphore(worker_count)
         batch_state = {"ollama_error": None, "stopped": asyncio.Event()}
 
         # Closing or reloading the page stops the batch like an Ollama
@@ -396,13 +380,14 @@ async def _run_batch(
         watcher = asyncio.ensure_future(
             _stop_when_disconnected(request, batch_state["stopped"])
         )
+        # One bug at a time: Ollama runs Qwen3-VL one request at a time
+        # anyway (the model does not support parallel requests), so sending
+        # several only made them wait in a queue.
         try:
-            results = await asyncio.gather(
-                *(
-                    process_batch_record(record, semaphore, progress, batch_state)
-                    for record in records
-                )
-            )
+            results = [
+                await process_batch_record(record, progress, batch_state)
+                for record in records
+            ]
         finally:
             watcher.cancel()
 
@@ -419,7 +404,6 @@ async def _run_batch(
             "duplicates": duplicates,
             "not_analyzed": not_analyzed,
             "rejected": rejected,
-            "workers": worker_count,
             # Set when the Excel headers were matched by the LLM.
             "detected_columns": details.get("detected_columns"),
             "skipped_hidden_rows": details.get("skipped_hidden_rows", 0),

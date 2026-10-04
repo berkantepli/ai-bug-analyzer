@@ -1,6 +1,5 @@
 import asyncio
 import re
-import time
 import zipfile
 from io import BytesIO
 
@@ -330,17 +329,20 @@ def test_batch_stops_sending_bugs_once_ollama_is_unavailable(monkeypatch) -> Non
     assert [bug["error"] for bug in data["bugs"]] == [bugs.NOT_ANALYZED_ERROR] * 3
 
 
-def test_running_analyses_are_released_when_ollama_fails(monkeypatch) -> None:
+def test_bugs_are_analyzed_one_at_a_time_in_file_order(monkeypatch) -> None:
+    running = []
+    most_at_once = []
+    analyzed_titles = []
+
     async def fake_analyze_with_llm(bug, screenshots=None):
-        if bug.title == "Login fails":
-            await asyncio.sleep(0.05)
-            raise OllamaUnavailableError("Ollama did not respond.")
-        # Simulates a request stuck on a hung Ollama.
-        await asyncio.sleep(30)
+        running.append(bug.title)
+        most_at_once.append(len(running))
+        await asyncio.sleep(0.01)
+        running.remove(bug.title)
+        analyzed_titles.append(bug.title)
         return FAKE_ANALYSIS
 
     monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
-    monkeypatch.setattr(bugs, "calculate_worker_count", lambda total: 3)
 
     content = excel_bytes(
         [
@@ -351,12 +353,11 @@ def test_running_analyses_are_released_when_ollama_fails(monkeypatch) -> None:
         ]
     )
 
-    started = time.monotonic()
     response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
-    elapsed = time.monotonic() - started
 
-    assert elapsed < 5
-    assert [bug["status"] for bug in response.json()["bugs"]] == ["not_analyzed"] * 3
+    assert response.status_code == 200
+    assert max(most_at_once) == 1
+    assert analyzed_titles == ["Logout fails", "Login fails", "Search fails"]
 
 
 def test_retry_analyzes_the_given_bugs(monkeypatch) -> None:
