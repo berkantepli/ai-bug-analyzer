@@ -158,3 +158,19 @@ def test_bug_analysis_rejects_fields_with_only_spaces(monkeypatch, field) -> Non
     assert response.json() == {
         "detail": f"Missing required values: {field.replace('_', ' ')}."
     }
+
+
+def test_unexpected_errors_are_returned_as_json(monkeypatch) -> None:
+    async def broken_analysis(bug, screenshots=None):
+        raise ValueError("bug in the analysis code")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", broken_analysis)
+
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/bugs/analyze", data=VALID_BUG
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Unexpected server error. The details are in the server log."
+    }

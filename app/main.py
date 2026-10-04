@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -16,6 +17,20 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+logger = logging.getLogger(__name__)
+
+
+@app.exception_handler(Exception)
+async def unexpected_error(request: Request, error: Exception) -> JSONResponse:
+    """Answer unexpected errors with JSON the page can show; details are logged."""
+    logger.exception("Unexpected error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Unexpected server error. The details are in the server log."
+        },
+    )
 
 # Endpoints that start LLM work; other websites must not trigger them
 # through the user's browser.
