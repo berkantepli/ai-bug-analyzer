@@ -1,5 +1,7 @@
 import asyncio
+import re
 import time
+import zipfile
 from io import BytesIO
 
 import pytest
@@ -478,6 +480,86 @@ def test_excel_severity_and_priority_are_mapped(
 
     analysis = response.json()["bugs"][0]["analysis"]
     assert (analysis["severity"], analysis["priority"]) == expected
+
+
+def test_formulas_without_saved_results_are_explained(monkeypatch) -> None:
+    analyzed_titles = []
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        analyzed_titles.append(bug.title)
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    # openpyxl saves formulas without results, like files written by scripts.
+    content = excel_bytes(
+        [
+            HEADER,
+            ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error"),
+            ('=A2&" on mobile"', "=B2", "1. Login on a phone", "Dashboard", "=E2"),
+            ("=A2", "=B2", "=C2", "=D2", "=E2"),
+            ("Search fails", "No results", "1. Search", "Results", "Empty", "=1+1"),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.status_code == 200
+    bugs_by_row = {bug["row"]: bug for bug in response.json()["bugs"]}
+    assert analyzed_titles == ["Login fails", "Search fails"]
+    assert bugs_by_row[3]["error"] == (
+        "Formula without a saved result in: title, description, actual result. "
+        "Open the file in Excel and save it again so the formula results are stored."
+    )
+    # A row made only of formulas used to be skipped as empty.
+    assert bugs_by_row[4]["status"] == "failed"
+    assert "Formula without a saved result" in bugs_by_row[4]["error"]
+    # Formulas in columns the app does not use do not matter.
+    assert bugs_by_row[5]["status"] == "analyzed"
+
+
+def with_saved_formula_results(content: bytes, results: dict[str, str]) -> bytes:
+    """Store formula results in the file the way Excel does when it saves."""
+    source = zipfile.ZipFile(BytesIO(content))
+    output = BytesIO()
+    with zipfile.ZipFile(output, "w") as target:
+        for item in source.infolist():
+            data = source.read(item.filename)
+            if item.filename == "xl/worksheets/sheet1.xml":
+                xml = data.decode()
+                for cell, result in results.items():
+                    xml = re.sub(
+                        rf'<c r="{cell}">(<f>.*?</f>)<v />',
+                        rf'<c r="{cell}" t="str">\1<v>{result}</v>',
+                        xml,
+                    )
+                data = xml.encode()
+            target.writestr(item, data)
+    return output.getvalue()
+
+
+def test_formulas_with_saved_results_are_read(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = with_saved_formula_results(
+        excel_bytes(
+            [
+                HEADER,
+                ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error"),
+                ("=A2", "=B2", "1. Login on a phone", "Dashboard", "=E2"),
+            ]
+        ),
+        {"A3": "Login fails on mobile", "B3": "Cannot sign in", "E3": "Error"},
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    formula_row = response.json()["bugs"][1]
+    assert formula_row["status"] == "analyzed"
+    assert formula_row["bug"]["title"] == "Login fails on mobile"
 
 
 def test_batch_endpoint_finds_header_below_report_title(monkeypatch) -> None:

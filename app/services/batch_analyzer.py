@@ -111,6 +111,32 @@ def _format_cell(value: object, number_format: str = "General") -> object:
     return value
 
 
+def _unsaved_formula_cells(
+    content: bytes, rows: list[tuple[object, ...]]
+) -> frozenset[tuple[int, int]]:
+    """Find formula cells whose result was never saved.
+
+    Excel stores each formula's result when it saves a file; files written by
+    scripts often contain only the formula, which reads as an empty cell.
+    """
+    workbook = load_workbook(BytesIO(content), read_only=True, data_only=False)
+    try:
+        cells = set()
+        for row_number, row in enumerate(
+            islice(workbook.active.iter_rows(min_row=1, values_only=True), len(rows)),
+            start=1,
+        ):
+            saved = rows[row_number - 1]
+            for index, value in enumerate(row):
+                is_formula = isinstance(value, str) and value.startswith("=")
+                no_result = index >= len(saved) or saved[index] is None
+                if is_formula and no_result:
+                    cells.add((row_number, index))
+        return frozenset(cells)
+    finally:
+        workbook.close()
+
+
 def _xls_cell_value(workbook: xlrd.book.Book, cell: xlrd.sheet.Cell) -> object:
     if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK, xlrd.XL_CELL_ERROR):
         return None
@@ -222,11 +248,25 @@ def build_record(row_number: int, values: dict[str, str]) -> dict:
     return {"row": row_number, "values": values, "error": error, "duplicate_of": None}
 
 
+def _unsaved_formula_error(fields: list[str]) -> str:
+    labels = ", ".join(field.replace("_", " ") for field in fields)
+    return (
+        f"Formula without a saved result in: {labels}. Open the file in Excel "
+        "and save it again so the formula results are stored."
+    )
+
+
 async def _records_from_rows(
     rows: list[tuple[object, ...]],
+    unsaved_formulas: frozenset[tuple[int, int]] = frozenset(),
 ) -> tuple[list[dict], Optional[dict[str, str]]]:
     """Return the bug records and, when the LLM matched the columns, which
-    header was used for each field so the user can check it."""
+    header was used for each field so the user can check it.
+
+    unsaved_formulas holds (Excel row, column index) of formula cells whose
+    result was never saved; they read as empty, so the row gets an
+    explanation instead of "missing values".
+    """
     if not rows:
         raise HTTPException(status_code=422, detail="The Excel file is empty.")
 
@@ -270,9 +310,18 @@ async def _records_from_rows(
             else ""
             for field, index in indexes.items()
         }
-        if not any(values.values()):
+        formula_fields = [
+            field
+            for field in REQUIRED_FIELDS
+            if (row_number, indexes[field]) in unsaved_formulas
+        ]
+        if not any(values.values()) and not formula_fields:
             continue
-        records.append(build_record(row_number, values))
+
+        record = build_record(row_number, values)
+        if formula_fields:
+            record["error"] = _unsaved_formula_error(formula_fields)
+        records.append(record)
 
     if not records:
         raise HTTPException(
@@ -339,6 +388,7 @@ async def parse_bug_spreadsheet(
                 workbook.close()
             if len(rows) > MAX_SHEET_ROWS:
                 raise too_many_rows
+            unsaved_formulas = _unsaved_formula_cells(content, rows)
         elif filename.endswith(".xls"):
             workbook = xlrd.open_workbook(file_contents=content, formatting_info=True)
             sheet = workbook.sheet_by_index(0)
@@ -348,6 +398,8 @@ async def parse_bug_spreadsheet(
                 tuple(_xls_cell_value(workbook, cell) for cell in sheet.row(index))
                 for index in range(sheet.nrows)
             ]
+            # xlrd only exposes saved formula results, not the formulas.
+            unsaved_formulas = frozenset()
         else:
             raise HTTPException(
                 status_code=415,
@@ -360,4 +412,4 @@ async def parse_bug_spreadsheet(
             status_code=422, detail="The uploaded Excel file could not be read."
         ) from exc
 
-    return await _records_from_rows(rows)
+    return await _records_from_rows(rows, unsaved_formulas)
