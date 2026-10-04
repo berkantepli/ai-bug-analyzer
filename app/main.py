@@ -18,7 +18,10 @@ app = FastAPI(
     version="0.1.0",
 )
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+# Relative to this file, so the app also starts from another directory.
+APP_DIR = Path(__file__).parent
+
+app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
 logger = logging.getLogger(__name__)
 
@@ -79,5 +82,5 @@ app.include_router(health_router)
 
 @app.get("/", response_class=HTMLResponse)
 def home() -> str:
-    html_path = Path(__file__).parent / "templates" / "index.html"
+    html_path = APP_DIR / "templates" / "index.html"
     return html_path.read_text(encoding="utf-8")
