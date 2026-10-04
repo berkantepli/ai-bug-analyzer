@@ -1,6 +1,6 @@
 # AI Bug Analyzer
 
-A QA-focused tool that turns software bug reports into a structured analysis using a local vision-capable LLM (Ollama + Qwen3-VL). Analyze a single bug with optional screenshots, or a whole Excel file of bugs at once.
+A QA-focused tool that turns software bug reports into a structured analysis using a local vision-capable LLM (Ollama + Qwen3-VL). Analyze a single bug with optional screenshots, or a whole Excel or CSV file of bugs at once.
 
 > **Note:** This is a learning and portfolio project. AI-generated analysis is a hypothesis and should be reviewed by a QA engineer before it is treated as a confirmed finding.
 
@@ -41,9 +41,9 @@ Low-quality input is rejected with a clear reason instead of producing a mislead
 
 Short or vague reports about real software behavior (for example "It does not work") are still analyzed, with low confidence and a list of missing information.
 
-### Batch analysis (Excel)
+### Batch analysis (Excel and CSV)
 
-Upload an `.xlsx` or `.xls` file to analyze many bugs at once.
+Upload an `.xlsx`, `.xls` or `.csv` file to analyze many bugs at once.
 
 - **Never stops on a bad row.** Rows with missing values, unusable text or LLM errors are shown as **FAILED** with the reason, and the remaining bugs are still analyzed.
 - **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
@@ -57,9 +57,10 @@ The page shows whether the analysis service is available and keeps it up to date
 
 ---
 
-## Excel format
+## Excel and CSV format
 
 - The file must contain **a single sheet**; only the active sheet is read.
+- CSV files may use commas, semicolons or tabs, in UTF-8 or Windows Turkish (cp1254) encoding.
 - Password-protected files cannot be read; remove the password first.
 - Limits: at most **5 MB**, **2000 rows** in the sheet and **500 bug records**.
 - The header row may be anywhere in the **first 20 rows**, so report titles or notes can sit above it.
@@ -110,7 +111,7 @@ The model is forced to answer with JSON that matches a Pydantic schema, so every
 - **Backend:** Python 3.9+, FastAPI, Pydantic, Uvicorn
 - **LLM:** Ollama with `qwen3-vl:8b-instruct`
 - **Frontend:** HTML, CSS and JavaScript in a single template
-- **Excel:** openpyxl (`.xlsx`), xlrd (`.xls`)
+- **Excel and CSV:** openpyxl (`.xlsx`), xlrd (`.xls`), Python's csv module
 - **Tests:** pytest, HTTPX
 
 ---
@@ -143,7 +144,7 @@ tests/                       # pytest suite (the LLM is mocked)
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/bugs/analyze` | Analyze one bug (form fields + optional `screenshots`) |
-| `POST` | `/bugs/batch` | Analyze an Excel file (`file`, optional `batch_id`) |
+| `POST` | `/bugs/batch` | Analyze an Excel or CSV file (`file`, optional `batch_id`) |
 | `POST` | `/bugs/batch/retry` | Analyze bugs again from an earlier batch result (JSON) |
 | `GET` | `/bugs/batch/{batch_id}/progress` | Progress of a running batch |
 | `GET` | `/health` | Application health |

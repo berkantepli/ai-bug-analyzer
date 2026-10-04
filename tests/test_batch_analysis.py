@@ -80,11 +80,11 @@ def test_batch_endpoint_reports_missing_columns() -> None:
 
 def test_batch_endpoint_rejects_unsupported_file_types() -> None:
     response = client.post(
-        "/bugs/batch", files={"file": ("bugs.csv", b"title,description")}
+        "/bugs/batch", files={"file": ("bugs.txt", b"title,description")}
     )
 
     assert response.status_code == 415
-    assert ".xlsx and .xls" in response.json()["detail"]
+    assert ".xlsx, .xls and .csv" in response.json()["detail"]
 
 
 def test_batch_endpoint_marks_rows_with_missing_values_as_failed(monkeypatch) -> None:

@@ -1,5 +1,6 @@
+import csv
 from datetime import date, datetime, time
-from io import BytesIO
+from io import BytesIO, StringIO
 from itertools import islice
 import re
 from typing import Optional
@@ -144,6 +145,30 @@ PASSWORD_PROTECTED_ERROR = (
     "The Excel file is password-protected. Remove the password, save the "
     "file and upload it again."
 )
+
+
+def _csv_rows(content: bytes) -> list[tuple[object, ...]]:
+    """Read a CSV export, guessing the encoding and the delimiter."""
+    for encoding in ("utf-8-sig", "cp1254"):
+        try:
+            text = content.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text = content.decode("latin-1")
+
+    try:
+        dialect = csv.Sniffer().sniff(text[:5000], delimiters=",;\t|")
+    except csv.Error:
+        dialect = csv.excel
+
+    rows = []
+    for row in csv.reader(StringIO(text), dialect):
+        rows.append(tuple(row))
+        if len(rows) > MAX_SHEET_ROWS:
+            break
+    return rows
 
 
 def _xls_cell_value(workbook: xlrd.book.Book, cell: xlrd.sheet.Cell) -> object:
@@ -415,10 +440,15 @@ async def parse_bug_spreadsheet(
             ]
             # xlrd only exposes saved formula results, not the formulas.
             unsaved_formulas = frozenset()
+        elif filename.endswith(".csv"):
+            rows = _csv_rows(content)
+            if len(rows) > MAX_SHEET_ROWS:
+                raise too_many_rows
+            unsaved_formulas = frozenset()
         else:
             raise HTTPException(
                 status_code=415,
-                detail="Only .xlsx and .xls files are supported for batch analysis.",
+                detail="Only .xlsx, .xls and .csv files are supported for batch analysis.",
             )
     except HTTPException:
         raise
