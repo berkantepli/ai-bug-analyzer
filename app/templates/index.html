@@ -1337,6 +1337,24 @@
             white-space: nowrap;
         }
 
+        .screenshot-hint {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .screenshot-notice {
+            margin-top: 6px;
+            color: var(--critical-text);
+            font-size: 12px;
+        }
+
+        .screenshot-button.disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+            pointer-events: none;
+        }
+
         .screenshot-list {
             display: flex;
             flex-wrap: wrap;
@@ -2105,6 +2123,13 @@
                             No file chosen
                         </span>
                     </div>
+
+                    <div class="screenshot-hint">
+                        <span id="screenshotCount">0/5</span> added · Max 10 MB per image ·
+                        PNG, JPEG, WEBP, GIF, BMP
+                    </div>
+
+                    <div id="screenshotNotice" class="screenshot-notice" role="alert" hidden></div>
                 </div>
 
                 <div class="clear-wrapper">
@@ -3114,22 +3139,58 @@
         const screenshotInput = document.getElementById("screenshot");
         const screenshotFileName = document.getElementById("screenshot-file-name");
 
+        const screenshotButton = document.querySelector(".screenshot-button");
+        const screenshotCount = document.getElementById("screenshotCount");
+        const screenshotNotice = document.getElementById("screenshotNotice");
+
+        // Same limits as MAX_SCREENSHOTS and MAX_SCREENSHOT_BYTES in
+        // app/api/bugs.py.
+        const MAX_SCREENSHOTS = 5;
+        const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
+
         let selectedScreenshots = [];
 
-        screenshotInput.addEventListener("change", () => {
-            const newFiles = Array.from(screenshotInput.files);
+        function showScreenshotNotice(messages) {
+            screenshotNotice.textContent = messages.join(" ");
+            screenshotNotice.hidden = messages.length === 0;
+        }
 
-            newFiles.forEach(file => {
-                selectedScreenshots.push(file);
+        screenshotInput.addEventListener("change", () => {
+            const messages = [];
+            let skippedForCount = 0;
+
+            Array.from(screenshotInput.files).forEach(file => {
+                if (file.size > MAX_SCREENSHOT_BYTES) {
+                    messages.push(
+                        `${file.name} (${formatFileSize(file.size)}) is larger than 10 MB.`
+                    );
+                } else if (selectedScreenshots.length >= MAX_SCREENSHOTS) {
+                    skippedForCount += 1;
+                } else {
+                    selectedScreenshots.push(file);
+                }
             });
 
+            if (skippedForCount) {
+                messages.push(
+                    `At most ${MAX_SCREENSHOTS} screenshots can be added; ` +
+                    `${skippedForCount} ${skippedForCount === 1 ? "was" : "were"} not added.`
+                );
+            }
+
             renderScreenshots();
+            showScreenshotNotice(messages);
 
             screenshotInput.value = "";
         });
 
         function renderScreenshots() {
             screenshotFileName.innerHTML = "";
+
+            const full = selectedScreenshots.length >= MAX_SCREENSHOTS;
+            screenshotCount.textContent = `${selectedScreenshots.length}/${MAX_SCREENSHOTS}`;
+            screenshotInput.disabled = full;
+            screenshotButton.classList.toggle("disabled", full);
 
             if (selectedScreenshots.length === 0) {
                 screenshotFileName.textContent = "No file chosen";
@@ -3155,6 +3216,7 @@
                 removeButton.addEventListener("click", () => {
                     selectedScreenshots.splice(index, 1);
                     renderScreenshots();
+                    showScreenshotNotice([]);
                 });
 
                 item.appendChild(img);
@@ -4484,6 +4546,7 @@
             selectedScreenshots = [];
             screenshotInput.value = "";
             renderScreenshots();
+            showScreenshotNotice([]);
 
             fields.bugTitle.input.focus();
         });
