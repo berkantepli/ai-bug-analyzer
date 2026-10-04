@@ -108,6 +108,11 @@ When is_valid_bug_report is true, invalid_reason must be an empty string.
 """.strip()
 
 
+def _numbered(steps: list[str]) -> str:
+    """Number the steps so their order is explicit for the model."""
+    return "\n".join(f"{number}. {step}" for number, step in enumerate(steps, start=1))
+
+
 def _report_text(bug: BugReportCreate) -> str:
     return f"""
 <bug_report>
@@ -118,7 +123,7 @@ Description:
 {bug.description}
 
 Steps to Reproduce:
-{chr(10).join(bug.steps_to_reproduce)}
+{_numbered(bug.steps_to_reproduce)}
 
 Expected Result:
 {bug.expected_result}

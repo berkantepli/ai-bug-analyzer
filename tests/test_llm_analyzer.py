@@ -315,3 +315,9 @@ def test_unusable_answer_is_requested_once_more(monkeypatch) -> None:
 
     assert result.screenshot_matches_report is True
     assert answers == []
+
+
+def test_steps_are_numbered_for_the_model() -> None:
+    prompt = llm_analyzer.build_validity_prompt(BUG)
+
+    assert "1. Open login\n2. Submit" in prompt

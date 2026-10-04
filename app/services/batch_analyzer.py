@@ -20,6 +20,7 @@ from app.services.readability import (
     normalize_text,
     readability_error,
 )
+from app.services.steps import split_steps
 
 
 FIELD_ALIASES = {
@@ -342,10 +343,12 @@ async def _match_columns_with_llm(
 
 def build_record(row_number: int, values: dict[str, str]) -> dict:
     """Validate one bug's values; rows with an error are not sent to the LLM."""
+    # Steps made only of list markers ("1.", "-") contain no step either.
     missing_values = [
         field.replace("_", " ")
         for field in REQUIRED_FIELDS
         if not values.get(field, "").strip()
+        or (field == "steps_to_reproduce" and not split_steps(values[field]))
     ]
     if missing_values:
         error = f"Missing required values: {', '.join(missing_values)}."

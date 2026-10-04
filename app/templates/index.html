@@ -3364,17 +3364,6 @@
          * ]
          */
 
-        function parseStepsToReproduce(value) {
-            return value
-                .split(/\r?\n/)
-                .map(step => {
-                    return step
-                        .replace(/^\s*(?:\d+[\.\)]|-|\*)\s*/, "")
-                        .trim();
-                })
-                .filter(Boolean);
-        }
-
         /*
          * Error formatting
          */
@@ -4426,20 +4415,6 @@
 
             setSavedResult("single", null);
 
-            /*
-             * FIX:
-             * Convert the textarea value into a list before sending it.
-             */
-            const stepsToReproduce = parseStepsToReproduce(
-                fields.stepsToReproduce.input.value
-            );
-
-            if (stepsToReproduce.length === 0) {
-                fields.stepsToReproduce.input.classList.add("invalid");
-                fields.stepsToReproduce.error.classList.add("visible");
-                return;
-            }
-
             const formData = new FormData();
 
             formData.append(
@@ -4452,9 +4427,11 @@
                 fields.description.input.value.trim()
             );
 
+            // Sent as written; the server splits it into steps and removes
+            // list markers such as "1." or "-" (app/services/steps.py).
             formData.append(
                 "steps_to_reproduce",
-                stepsToReproduce.join("\n")
+                fields.stepsToReproduce.input.value.trim()
             );
 
             formData.append(

@@ -21,6 +21,8 @@ Enter a title, description, steps to reproduce, expected result, actual result a
 
 If a screenshot shows a different page than the report describes, the report is still analyzed. The mismatch is explained in Visual Evidence and confidence is capped at 0.6.
 
+Steps to reproduce are written one per line, with or without list markers such as `1.`, `2)`, `-`, `•`, `a)` or `Step 3:`; the markers are removed and the steps are numbered for the model, while values such as `1.5 GB` or `10.0.0.1` stay intact. The same applies to steps in Excel and CSV files.
+
 Each text field can be up to 5,000 characters. Up to 5 screenshots of at most 10 MB each can be attached, in PNG, JPEG, WEBP, GIF or BMP format; the page shows how many are added (for example `2/5`) and refuses larger files before uploading. A damaged image file is reported as unreadable.
 
 ### Report language
@@ -142,7 +144,8 @@ app/
 │   ├── llm_analyzer.py      # Prompts and Ollama calls
 │   ├── batch_analyzer.py    # Excel/CSV parsing, header detection, duplicates
 │   ├── excel_values.py      # Severity and priority value mapping
-│   └── readability.py       # Unreadable, placeholder and identical-field checks
+│   ├── readability.py       # Unreadable, placeholder and identical-field checks
+│   └── steps.py             # Splitting steps to reproduce into steps
 ├── static/images/logo.png
 ├── templates/index.html     # Web interface
 ├── config.py                # Ollama URL and model

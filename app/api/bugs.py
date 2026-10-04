@@ -23,6 +23,7 @@ from app.services.batch_analyzer import (
 )
 from app.services.excel_values import map_priority, map_severity
 from app.services.readability import MAX_FIELD_CHARS
+from app.services.steps import split_steps
 
 import asyncio
 import re
@@ -139,11 +140,7 @@ def to_bug_report(values: dict[str, str]) -> BugReportCreate:
     return BugReportCreate(
         title=values["title"],
         description=values["description"],
-        steps_to_reproduce=[
-            step.strip()
-            for step in values["steps_to_reproduce"].splitlines()
-            if step.strip()
-        ],
+        steps_to_reproduce=split_steps(values["steps_to_reproduce"]),
         expected_result=values["expected_result"],
         actual_result=values["actual_result"],
     )

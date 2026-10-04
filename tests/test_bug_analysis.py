@@ -226,3 +226,28 @@ def test_unusable_llm_answer_is_not_reported_as_unavailable(monkeypatch) -> None
         "detail": "The LLM could not analyze this bug: "
         "The LLM returned an incomplete analysis. Try again."
     }
+
+
+def test_steps_are_split_without_their_markers(monkeypatch) -> None:
+    received = {}
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        received["steps"] = bug.steps_to_reproduce
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    steps = "1. Open the upload page\n• Upload a 1.5 GB file"
+    client.post("/bugs/analyze", data={**VALID_BUG, "steps_to_reproduce": steps})
+
+    assert received["steps"] == ["Open the upload page", "Upload a 1.5 GB file"]
+
+
+def test_steps_with_only_markers_are_missing() -> None:
+    data = {**VALID_BUG, "steps_to_reproduce": "1.\n-"}
+    response = client.post("/bugs/analyze", data=data)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Missing required values: steps to reproduce."
+    }

@@ -733,3 +733,20 @@ def test_activity_reports_a_running_batch(monkeypatch) -> None:
     )
 
     assert seen["during"] == {"batch_running": True, "single_running": False}
+
+
+def test_excel_steps_are_split_like_single_bug_steps(monkeypatch) -> None:
+    received = []
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        received.append(bug.steps_to_reproduce)
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+    row = ("Login fails", "Cannot sign in", "1. Open login\n2) Submit", "Dashboard", "Error")
+
+    client.post(
+        "/bugs/batch", files={"file": ("bugs.xlsx", excel_bytes([HEADER, row]))}
+    )
+
+    assert received == [["Open login", "Submit"]]
