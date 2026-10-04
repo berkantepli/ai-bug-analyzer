@@ -1997,7 +1997,7 @@
         </div>
 
         <main>
-            <form id="bugForm" class="form-card" novalidate>
+            <form id="bugForm" class="form-card" method="post" novalidate>
 
                 <div class="field">
                     <label for="bugTitle">Bug Title</label>
@@ -2085,7 +2085,7 @@
                 </div>
 
                 <div class="analyze-button-wrapper">
-                    <button id="analyzeButton" class="analyze-button" type="submit">
+                    <button id="analyzeButton" class="analyze-button" type="submit" disabled>
                         Analyze Bug
                     </button>
                 </div>
@@ -3058,8 +3058,26 @@
             );
         }
 
+        // Browsers that block site data throw on any storage access; the
+        // theme is then simply not remembered.
+        function readSavedTheme() {
+            try {
+                return localStorage.getItem("ai-bug-analyzer-theme");
+            } catch {
+                return null;
+            }
+        }
+
+        function saveTheme(theme) {
+            try {
+                localStorage.setItem("ai-bug-analyzer-theme", theme);
+            } catch {
+                // Not remembered; the switch still works for this page.
+            }
+        }
+
         function loadTheme() {
-            const savedTheme = localStorage.getItem("ai-bug-analyzer-theme");
+            const savedTheme = readSavedTheme();
 
             if (savedTheme === "light") {
                 document.body.classList.add("light");
@@ -3075,10 +3093,7 @@
 
             const isLight = document.body.classList.contains("light");
 
-            localStorage.setItem(
-                "ai-bug-analyzer-theme",
-                isLight ? "light" : "dark"
-            );
+            saveTheme(isLight ? "light" : "dark");
 
             updateThemeButton();
         });
