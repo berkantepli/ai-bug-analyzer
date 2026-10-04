@@ -708,6 +708,8 @@
         .batch-bug-title {
             flex: 1;
             min-width: 0;
+            /* Titles may hold long URLs or paths without spaces. */
+            overflow-wrap: anywhere;
         }
 
         .batch-bug-content {
@@ -850,6 +852,9 @@
             font-size: 12px;
             font-weight: 700;
             line-height: 1;
+            /* Categories from the Excel file can be long. */
+            max-width: 100%;
+            overflow-wrap: anywhere;
         }
 
         .summary-chip-count {
