@@ -244,7 +244,6 @@ The app is built to run **locally for a single user**:
 
 ## Future improvements
 
-- Jira and test management (Xray) integration
 - Persistent analysis history and report export
 
 ---
