@@ -1,6 +1,7 @@
 import asyncio
 import json
 import socket
+import time
 from io import BytesIO
 from urllib.error import HTTPError, URLError
 
@@ -234,3 +235,54 @@ def test_missing_model_is_reported_as_unavailable(monkeypatch) -> None:
         llm_analyzer._call_ollama({})
 
     assert "is not installed in Ollama. Run: ollama pull" in str(error.value)
+
+
+# Any small response schema; the answers are not validated here.
+SCHEMA = llm_analyzer.ScreenshotMatch
+
+
+def test_ollama_requests_are_sent_one_at_a_time(monkeypatch) -> None:
+    # Ollama queues parallel requests, and the queue time would count
+    # against the timeout.
+    running = []
+    most_at_once = []
+
+    def fake_call_ollama(payload):
+        running.append(1)
+        most_at_once.append(len(running))
+        time.sleep(0.05)
+        running.pop()
+        return {"message": {"content": "{}"}}
+
+    monkeypatch.setattr(llm_analyzer, "_call_ollama", fake_call_ollama)
+
+    async def send_three():
+        await asyncio.gather(
+            *(llm_analyzer._request_json("prompt", [], SCHEMA) for _ in range(3))
+        )
+
+    asyncio.run(send_three())
+
+    assert max(most_at_once) == 1
+
+
+def test_cancelled_request_waiting_for_its_turn_never_reaches_ollama(monkeypatch) -> None:
+    prompts = []
+
+    def fake_call_ollama(payload):
+        prompts.append(payload["messages"][0]["content"])
+        time.sleep(0.1)
+        return {"message": {"content": "{}"}}
+
+    monkeypatch.setattr(llm_analyzer, "_call_ollama", fake_call_ollama)
+
+    async def cancel_the_second():
+        first = asyncio.ensure_future(llm_analyzer._request_json("first", [], SCHEMA))
+        second = asyncio.ensure_future(llm_analyzer._request_json("second", [], SCHEMA))
+        await asyncio.sleep(0.02)
+        second.cancel()
+        await first
+
+    asyncio.run(cancel_the_second())
+
+    assert prompts == ["first"]

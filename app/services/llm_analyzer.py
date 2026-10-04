@@ -4,6 +4,7 @@ import json
 import logging
 import socket
 from typing import Optional
+import weakref
 
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -377,6 +378,46 @@ def _call_ollama(payload: dict) -> dict:
         raise RuntimeError("Ollama returned an invalid JSON response.") from error
 
 
+# Ollama usually runs one request at a time (OLLAMA_NUM_PARALLEL=1); requests
+# sent together wait in its queue, and that wait counted against the timeout,
+# so a busy batch looked like an unreachable Ollama. Requests wait here
+# instead, so the timeout only covers the model's own work. One lock per
+# event loop, as asyncio locks belong to the loop they are used in.
+_ollama_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _ollama_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    if loop not in _ollama_locks:
+        _ollama_locks[loop] = asyncio.Lock()
+    return _ollama_locks[loop]
+
+
+async def _call_ollama_in_turn(payload: dict) -> dict:
+    """Call Ollama once the requests before this one have finished.
+
+    A cancelled analysis that is still waiting never reaches Ollama. One that
+    is already running keeps the lock until Ollama answers, because Ollama
+    keeps working on it.
+    """
+    lock = _ollama_lock()
+    await lock.acquire()
+
+    call = asyncio.ensure_future(asyncio.to_thread(_call_ollama, payload))
+
+    def release(finished: asyncio.Future) -> None:
+        lock.release()
+        # Nobody may await a cancelled analysis; read the error so it is
+        # not reported as never retrieved.
+        if not finished.cancelled():
+            finished.exception()
+
+    call.add_done_callback(release)
+    return await asyncio.shield(call)
+
+
 async def _request_json(prompt: str, images: list[str], schema: type) -> dict:
     payload = {
         "model": OLLAMA_MODEL,
@@ -396,10 +437,7 @@ async def _request_json(prompt: str, images: list[str], schema: type) -> dict:
     }
 
     try:
-        response = await asyncio.to_thread(
-            _call_ollama,
-            payload,
-        )
+        response = await _call_ollama_in_turn(payload)
 
     except RuntimeError:
         raise

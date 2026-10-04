@@ -49,7 +49,7 @@ Upload an `.xlsx`, `.xls` or `.csv` file to analyze many bugs at once.
 - **Never stops on a bad row.** Rows with missing values, unusable text or LLM errors are shown as **FAILED** with the reason, and the remaining bugs are still analyzed.
 - **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
 - **Stops when Ollama goes away.** If Ollama becomes unreachable, the remaining bugs are marked **NOT ANALYZED** instead of each waiting for a timeout, and a **Retry not analyzed bugs** button analyzes only those once Ollama is back.
-- **Live progress** with elapsed time. Each browser tab tracks its own batch, so several batches can run at the same time.
+- **Live progress** with elapsed time. Each browser tab tracks its own batch, so several batches can run at the same time; their requests take turns at Ollama.
 - **Summary** of analyzed, failed, duplicate and not analyzed bugs, with severity, priority and category counts.
 
 ### Service diagnosis
@@ -223,7 +223,7 @@ The app is built to run **locally for a single user**:
 
 ## Limitations
 
-- Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, so a large batch can take a long time.
+- Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, so a large batch can take a long time. Ollama handles one request at a time, so a single bug analyzed during a batch waits for its turn.
 - Very large screenshots use many tokens; if a report and its screenshots still do not fit into the context window, the analysis is rejected with a message asking for fewer screenshots or a shorter text.
 - Matching non-English Excel headers needs Ollama and adds a few seconds; if the LLM cannot match every required column, the file is rejected.
 - Formula cells are read from the results Excel stores when it saves a file. Files written by scripts often contain formulas without results; such rows are marked as failed with a request to open and save the file in Excel. Formulas are not calculated by the app itself.
