@@ -18,6 +18,7 @@ from app.services.batch_analyzer import (
     build_record,
     parse_bug_spreadsheet,
 )
+from app.services.excel_values import map_priority, map_severity
 from app.services.readability import (
     field_length_error,
     identical_fields_error,
@@ -213,11 +214,15 @@ async def process_batch_record(
 
     analysis = analysis.model_dump()
 
-    if values.get("severity"):
-        analysis["severity"] = values["severity"].strip().upper()
+    # Severity and priority from the Excel file win over the LLM when they
+    # map to the app's scale; unknown values keep the LLM's suggestion.
+    severity = map_severity(values.get("severity", ""))
+    if severity:
+        analysis["severity"] = severity
 
-    if values.get("priority"):
-        analysis["priority"] = values["priority"].strip().upper()
+    priority = map_priority(values.get("priority", ""))
+    if priority:
+        analysis["priority"] = priority
 
     if values.get("category"):
         analysis["category"] = values["category"].strip()

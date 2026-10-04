@@ -2,6 +2,7 @@ import asyncio
 import time
 from io import BytesIO
 
+import pytest
 from openpyxl import Workbook
 from fastapi.testclient import TestClient
 import httpx
@@ -444,6 +445,39 @@ def test_batch_without_ollama_errors_has_no_stopped_reason(monkeypatch) -> None:
     response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
 
     assert response.json()["stopped_reason"] is None
+
+
+@pytest.mark.parametrize(
+    ("severity", "priority", "expected"),
+    [
+        ("Yüksek", "Highest", ("HIGH", "P1")),
+        ("Blocker", "Lowest", ("CRITICAL", "P4")),
+        ("Sev 3", "P0", ("MEDIUM", "P1")),
+        ("Zq#9", "Enhancement", ("HIGH", "P2")),
+        ("", "", ("HIGH", "P2")),
+    ],
+    ids=["turkish and jira", "jira", "numbers", "unknown values", "empty cells"],
+)
+def test_excel_severity_and_priority_are_mapped(
+    monkeypatch, severity, priority, expected
+) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            (*HEADER, "Severity", "Priority"),
+            ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error",
+             severity, priority),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    analysis = response.json()["bugs"][0]["analysis"]
+    assert (analysis["severity"], analysis["priority"]) == expected
 
 
 def test_batch_endpoint_finds_header_below_report_title(monkeypatch) -> None:
