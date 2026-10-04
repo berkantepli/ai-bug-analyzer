@@ -34,6 +34,11 @@ Upload these in the **Batch Analysis** tab. No bug is analyzed; an error message
 | `batch/10_empty_file.xlsx` | 0-byte file | 422 | The uploaded file is empty. |
 | `batch/11_larger_than_5mb.xlsx` ² | Larger than 5 MB | 413 | The Excel file is larger than 5 MB. |
 | `batch/13_unrecognized_headers.xlsx` 🤖 | Headers "Column A…E" that the LLM cannot match | 422 | Missing required Excel columns: title, description, steps to reproduce, expected result, actual result. |
+| `batch/14_corrupt_file.xls` | Damaged old-format `.xls` file | 422 | The uploaded Excel file could not be read. |
+| `batch/15_header_below_row_20.xlsx` | Header in row 22, below 21 note rows | 422 | Missing required Excel columns: title, description, steps to reproduce, expected result, actual result. |
+| `batch/17_excel_file_named_csv.csv` | An Excel file renamed to `.csv` | 422 | The uploaded CSV file could not be read. |
+| `batch/18_csv_file_named_xlsx.xlsx` | A CSV file renamed to `.xlsx` | 422 | The uploaded Excel file could not be read. |
+| `batch/19_no_extension` | File without an extension | 415 | Only .xlsx, .xls and .csv files are supported for batch analysis. |
 | `batch/22_csv_missing_column.csv` | CSV without an Actual Result column | 422 | Missing required CSV columns: actual result. |
 
 ¹ Not a real encrypted file, but one starting with the bytes the app uses to recognize encrypted Office files. To try a real one, use *File › Info › Protect Workbook › Encrypt with Password* in Excel.
@@ -45,6 +50,15 @@ Upload these in the **Batch Analysis** tab. No bug is analyzed; an error message
 | File | Ollama running | Ollama stopped |
 |---|---|---|
 | `batch/12_turkish_headers_need_ollama.xlsx` 🤖 | Analyzed; the matching is shown above the results: Başlık → title, Açıklama → description, Tekrar Adımları → steps, Beklenen Sonuç → expected, Gerçekleşen Sonuç → actual | 422 – Missing required Excel columns: title, description, steps to reproduce, expected result, actual result. Headers that are not in English are matched by the LLM, but Ollama is unavailable. |
+
+### Two columns with the same header
+
+`batch/16_duplicate_title_columns.xlsx` has two Title columns. Only the first one is read:
+
+| Row | Scenario | Result |
+|---|---|---|
+| 2 | Both Title columns filled | ANALYZED with the first column's title |
+| 3 | Title only in the second column | FAILED – Missing required values: title. |
 
 ---
 
@@ -87,6 +101,10 @@ The header is in row 3: the note above it shows that the header can be anywhere 
 Upload any valid file (for example `20_row_level_errors.xlsx`) and stop Ollama while it runs:
 the remaining bugs become **NOT ANALYZED**, the page shows *Ollama became unavailable during the batch: …* and a **Retry not analyzed bugs** button appears.
 
+### The page is closed or Clear is pressed during the analysis
+
+The server stops as well, so Ollama is not kept busy: bugs not analyzed yet are not sent, and a single bug analysis ends with HTTP 499 *The request was cancelled.* Nobody sees these results, so there is no message on the page; the server log shows *Client disconnected; stopping …*.
+
 ---
 
 ## 3. Single bug analysis
@@ -114,6 +132,8 @@ Scenarios with a `base` field reuse the text of that scenario with other screens
 | S16 | Image larger than 10 MB (`larger_than_10mb.png`) ² | 413 | Screenshot 'larger_than_10mb.png' is larger than 10 MB. |
 | S17 | Cut-off PNG (`truncated.png`) 🤖 | 422 | A screenshot could not be read; the file may be damaged or incomplete. Save it again or remove it, then try again. |
 | S18 | Ollama stopped ⁴ | 503 | The LLM could not analyze this bug: Could not connect to Ollama. Make sure Ollama is running on http://127.0.0.1:11434. |
+| S19 | `actual_result` not sent at all (API only; the page always sends every field) | 422 | FastAPI's validation error: `{"type": "missing", "loc": ["body", "actual_result"], "msg": "Field required"}` |
+| S20 | Empty (0-byte) screenshot `empty.png` | 200 | The empty file is skipped and the report is analyzed without it |
 
 ³ Replace `__LONG_LOG__` in the JSON with a text longer than 5000 characters (for example, repeat the log line in `generate_samples.py` 70 times).
 

@@ -155,5 +155,18 @@
     "base": "S01",
     "screenshots": [],
     "note": "Stop Ollama (quit the Ollama app). The page disables the analyze button anyway; call the API directly to see the message."
+  },
+  {
+    "id": "S19",
+    "scenario": "A required field is not sent at all (API only; the page always sends every field)",
+    "base": "S01",
+    "screenshots": [],
+    "omit": ["actual_result"]
+  },
+  {
+    "id": "S20",
+    "scenario": "Empty (0-byte) screenshot (skipped; the report is analyzed without it)",
+    "base": "S01",
+    "screenshots": ["empty.png"]
   }
 ]

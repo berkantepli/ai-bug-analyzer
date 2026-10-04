@@ -164,6 +164,50 @@ def unmatchable_headers(batch):
     save(workbook, batch, "13_unrecognized_headers.xlsx")
 
 
+
+def corrupt_xls(batch):
+    # Starts like an old .xls (an OLE container) but holds nothing.
+    (batch / "14_corrupt_file.xls").write_bytes(
+        b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 4096
+    )
+
+
+def header_below_row_20(batch):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Bugs"
+    for number in range(1, 22):
+        sheet.append([f"Report note {number}"])
+    sheet.append(HEADERS)
+    sheet.append(VALID_BUGS[0])
+    save(workbook, batch, "15_header_below_row_20.xlsx")
+
+
+def duplicate_title_columns(batch):
+    # Only the first Title column is read; the second one is ignored.
+    workbook, sheet = new_sheet(["Title", *HEADERS[1:], "Title"])
+    sheet.append([*VALID_BUGS[0], "Second title column, ignored"])
+    sheet.append(["", *VALID_BUGS[1][1:], VALID_BUGS[1][0]])
+    save(workbook, batch, "16_duplicate_title_columns.xlsx")
+
+
+def excel_named_csv(batch):
+    workbook, sheet = new_sheet()
+    sheet.append(VALID_BUGS[0])
+    save(workbook, batch, "17_excel_file_named_csv.csv")
+
+
+def csv_named_xlsx(batch):
+    lines = [",".join(HEADERS)]
+    lines.append(",".join(value.replace("\n", " / ") for value in VALID_BUGS[0]))
+    (batch / "18_csv_file_named_xlsx.xlsx").write_text("\n".join(lines), encoding="utf-8")
+
+
+def no_extension(batch):
+    workbook, sheet = new_sheet()
+    sheet.append(VALID_BUGS[0])
+    save(workbook, batch, "19_no_extension")
+
 # --- Batch: row-level errors (the file is analyzed, bad rows FAILED) -------
 
 
@@ -298,6 +342,8 @@ def screenshots(directory):
     (directory / "truncated.png").write_bytes(png(64, 64)[:40])
     # A text file renamed to .png: rejected by its first bytes.
     (directory / "not_an_image.png").write_text("This is not an image.\n")
+    # An empty file: skipped, the report is analyzed without it.
+    (directory / "empty.png").write_bytes(b"")
     # A PNG padded past 10 MB.
     (directory / "larger_than_10mb.png").write_bytes(png(8, 8) + b"\x00" * (10 * 1024 * 1024 + 1))
 
@@ -306,7 +352,9 @@ BATCH_BUILDERS = (
     missing_columns, header_only, all_rows_hidden, too_many_records,
     too_many_rows, too_many_formatted_rows, password_protected, corrupt_file,
     unsupported_format, empty_file, too_large, turkish_headers,
-    unmatchable_headers, row_errors, csv_semicolon_cp1254, csv_missing_column,
+    unmatchable_headers, corrupt_xls, header_below_row_20,
+    duplicate_title_columns, excel_named_csv, csv_named_xlsx, no_extension,
+    row_errors, csv_semicolon_cp1254, csv_missing_column,
 )
 
 
