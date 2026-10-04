@@ -61,6 +61,7 @@ The page shows whether the analysis service is available and keeps it up to date
 
 - The file must contain **a single sheet**; only the active sheet is read.
 - CSV files may use commas, semicolons or tabs, in UTF-8 or Windows Turkish (cp1254) encoding.
+- Hidden rows, including rows hidden by a filter, are skipped; the number of skipped rows is shown above the results.
 - Password-protected files cannot be read; remove the password first.
 - Limits: at most **5 MB**, **2000 rows** in the sheet and **500 bug records**.
 - The header row may be anywhere in the **first 20 rows**, so report titles or notes can sit above it.

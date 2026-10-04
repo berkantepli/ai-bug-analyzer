@@ -3388,6 +3388,23 @@
                 refreshAnalyzeButtons();
             }
 
+            if (data.skipped_hidden_rows) {
+                const hiddenInfo = document.createElement("div");
+                hiddenInfo.className = "result-item batch-columns-info";
+
+                const hiddenLabel = document.createElement("div");
+                hiddenLabel.className = "result-label";
+                hiddenLabel.textContent = "Hidden rows skipped";
+
+                const hiddenText = document.createElement("div");
+                hiddenText.className = "result-value";
+                hiddenText.textContent =
+                    `${data.skipped_hidden_rows} hidden or filtered rows were not analyzed. Unhide them in Excel to include them.`;
+
+                hiddenInfo.append(hiddenLabel, hiddenText);
+                resultGrid.appendChild(hiddenInfo);
+            }
+
             // Shown when the Excel headers were not recognized and the LLM
             // matched them, so the user can check the matching.
             if (data.detected_columns) {

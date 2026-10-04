@@ -284,12 +284,13 @@ async def analyze_bug(
 
 async def _run_batch(
     batch_id: Optional[str],
-    load_records: Callable[[], Awaitable[tuple[list[dict], Optional[dict]]]],
+    load_records: Callable[[], Awaitable[tuple[list[dict], dict]]],
 ) -> dict:
     """Analyze records with live progress; shared by batch and retry.
 
-    load_records returns the records and, when the LLM matched the Excel
-    columns, the header used for each field.
+    load_records returns the records and details for the response, such as
+    the Excel headers the LLM matched (detected_columns) and how many hidden
+    rows were skipped (skipped_hidden_rows).
     """
     batch_id = batch_id or uuid4().hex
     if not BATCH_ID_PATTERN.fullmatch(batch_id):
@@ -312,7 +313,7 @@ async def _run_batch(
     batch_progress[batch_id] = progress
 
     try:
-        records, detected_columns = await load_records()
+        records, details = await load_records()
 
         rejected = sum(1 for record in records if record["error"])
         duplicates = sum(1 for record in records if record["duplicate_of"])
@@ -353,7 +354,8 @@ async def _run_batch(
             "rejected": rejected,
             "workers": worker_count,
             # Set when the Excel headers were matched by the LLM.
-            "detected_columns": detected_columns,
+            "detected_columns": details.get("detected_columns"),
+            "skipped_hidden_rows": details.get("skipped_hidden_rows", 0),
             # Set when Ollama became unreachable and the batch stopped
             # sending the remaining bugs.
             "stopped_reason": (
@@ -404,7 +406,7 @@ async def retry_bug_batch(request: RetryRequest):
     not have to be uploaded again. They are validated like Excel rows.
     """
 
-    async def load_records() -> tuple[list[dict], None]:
-        return [build_record(item.row, item.bug) for item in request.bugs], None
+    async def load_records() -> tuple[list[dict], dict]:
+        return [build_record(item.row, item.bug) for item in request.bugs], {}
 
     return await _run_batch(request.batch_id, load_records)

@@ -1,11 +1,17 @@
+from io import BytesIO
+
 import pytest
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 
 from app.main import app
-from helpers import FAKE_ANALYSIS
+from helpers import FAKE_ANALYSIS, HEADER
 
 
 client = TestClient(app)
+
+LOGIN = ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error")
+LOGOUT = ("Logout fails", "Cannot sign out", "1. Logout", "Login page", "Error")
 
 
 @pytest.fixture(autouse=True)
@@ -60,3 +66,38 @@ def test_password_protected_xlsx_is_reported() -> None:
 
     assert response.status_code == 422
     assert "password-protected" in response.json()["detail"]
+
+
+def test_hidden_rows_are_skipped(fake_llm) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    for row in (HEADER, LOGIN, LOGOUT):
+        sheet.append(row)
+    sheet.row_dimensions[2].hidden = True
+    output = BytesIO()
+    workbook.save(output)
+
+    response = post("bugs.xlsx", output.getvalue())
+
+    data = response.json()
+    assert fake_llm == ["Logout fails"]
+    assert [bug["row"] for bug in data["bugs"]] == [3]
+    assert data["skipped_hidden_rows"] == 1
+
+
+def test_only_hidden_rows_explains_why_nothing_is_analyzed() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    for row in (HEADER, LOGIN):
+        sheet.append(row)
+    sheet.row_dimensions[2].hidden = True
+    output = BytesIO()
+    workbook.save(output)
+
+    response = post("bugs.xlsx", output.getvalue())
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "The Excel file contains no bug records. "
+        "1 hidden rows were skipped; unhide them to analyze them."
+    )

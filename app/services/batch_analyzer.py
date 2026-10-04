@@ -112,19 +112,23 @@ def _format_cell(value: object, number_format: str = "General") -> object:
     return value
 
 
-def _unsaved_formula_cells(
+def _xlsx_sheet_details(
     content: bytes, rows: list[tuple[object, ...]]
-) -> frozenset[tuple[int, int]]:
-    """Find formula cells whose result was never saved.
+) -> tuple[frozenset[tuple[int, int]], frozenset[int]]:
+    """Find formula cells without a saved result and hidden rows.
 
     Excel stores each formula's result when it saves a file; files written by
     scripts often contain only the formula, which reads as an empty cell.
+    Hidden rows include rows hidden by a filter. Read-only mode exposes
+    neither, so the file is opened once more in normal mode (the row limit
+    has already been checked).
     """
-    workbook = load_workbook(BytesIO(content), read_only=True, data_only=False)
+    workbook = load_workbook(BytesIO(content), data_only=False)
     try:
+        sheet = workbook.active
         cells = set()
         for row_number, row in enumerate(
-            islice(workbook.active.iter_rows(min_row=1, values_only=True), len(rows)),
+            islice(sheet.iter_rows(min_row=1, values_only=True), len(rows)),
             start=1,
         ):
             saved = rows[row_number - 1]
@@ -133,7 +137,13 @@ def _unsaved_formula_cells(
                 no_result = index >= len(saved) or saved[index] is None
                 if is_formula and no_result:
                     cells.add((row_number, index))
-        return frozenset(cells)
+
+        hidden = frozenset(
+            row_number
+            for row_number, dimension in sheet.row_dimensions.items()
+            if dimension.hidden
+        )
+        return frozenset(cells), hidden
     finally:
         workbook.close()
 
@@ -293,13 +303,18 @@ def _unsaved_formula_error(fields: list[str]) -> str:
 async def _records_from_rows(
     rows: list[tuple[object, ...]],
     unsaved_formulas: frozenset[tuple[int, int]] = frozenset(),
-) -> tuple[list[dict], Optional[dict[str, str]]]:
+    hidden_rows: frozenset[int] = frozenset(),
+) -> tuple[list[dict], dict]:
     """Return the bug records and, when the LLM matched the columns, which
     header was used for each field so the user can check it.
 
     unsaved_formulas holds (Excel row, column index) of formula cells whose
     result was never saved; they read as empty, so the row gets an
-    explanation instead of "missing values".
+    explanation instead of "missing values". Hidden rows (also rows hidden
+    by a filter) are skipped, as the user does not see them.
+
+    The second value holds details for the response: detected_columns and
+    skipped_hidden_rows.
     """
     if not rows:
         raise HTTPException(status_code=422, detail="The Excel file is empty.")
@@ -335,9 +350,15 @@ async def _records_from_rows(
         }
 
     records = []
+    skipped_hidden_rows = 0
     for row_number, row in enumerate(
         rows[header_index + 1 :], start=header_index + 2
     ):
+        if row_number in hidden_rows:
+            if any(_cell_text(value) for value in row):
+                skipped_hidden_rows += 1
+            continue
+
         values = {
             field: str(row[index]).strip()
             if index < len(row) and row[index] is not None
@@ -358,8 +379,15 @@ async def _records_from_rows(
         records.append(record)
 
     if not records:
+        hidden_note = (
+            f" {skipped_hidden_rows} hidden rows were skipped; unhide them "
+            "to analyze them."
+            if skipped_hidden_rows
+            else ""
+        )
         raise HTTPException(
-            status_code=422, detail="The Excel file contains no bug records."
+            status_code=422,
+            detail=f"The Excel file contains no bug records.{hidden_note}",
         )
 
     if len(records) > MAX_BUG_RECORDS:
@@ -372,7 +400,10 @@ async def _records_from_rows(
         )
 
     _mark_duplicates(records)
-    return records, detected_columns
+    return records, {
+        "detected_columns": detected_columns,
+        "skipped_hidden_rows": skipped_hidden_rows,
+    }
 
 
 def _mark_duplicates(records: list[dict]) -> None:
@@ -390,9 +421,7 @@ def _mark_duplicates(records: list[dict]) -> None:
             first_seen[key] = bug_number
 
 
-async def parse_bug_spreadsheet(
-    file: UploadFile,
-) -> tuple[list[dict], Optional[dict[str, str]]]:
+async def parse_bug_spreadsheet(file: UploadFile) -> tuple[list[dict], dict]:
     filename = (file.filename or "").lower()
     content = await file.read(MAX_EXCEL_BYTES + 1)
     if len(content) > MAX_EXCEL_BYTES:
@@ -407,6 +436,7 @@ async def parse_bug_spreadsheet(
     if filename.endswith(".xlsx") and content.startswith(OLE_SIGNATURE):
         raise HTTPException(status_code=422, detail=PASSWORD_PROTECTED_ERROR)
 
+    hidden_rows: frozenset[int] = frozenset()
     too_many_rows = HTTPException(
         status_code=422,
         detail=f"The Excel sheet has more than {MAX_SHEET_ROWS} rows.",
@@ -428,7 +458,7 @@ async def parse_bug_spreadsheet(
                 workbook.close()
             if len(rows) > MAX_SHEET_ROWS:
                 raise too_many_rows
-            unsaved_formulas = _unsaved_formula_cells(content, rows)
+            unsaved_formulas, hidden_rows = _xlsx_sheet_details(content, rows)
         elif filename.endswith(".xls"):
             workbook = xlrd.open_workbook(file_contents=content, formatting_info=True)
             sheet = workbook.sheet_by_index(0)
@@ -440,6 +470,11 @@ async def parse_bug_spreadsheet(
             ]
             # xlrd only exposes saved formula results, not the formulas.
             unsaved_formulas = frozenset()
+            hidden_rows = frozenset(
+                index + 1
+                for index, info in sheet.rowinfo_map.items()
+                if info.hidden
+            )
         elif filename.endswith(".csv"):
             rows = _csv_rows(content)
             if len(rows) > MAX_SHEET_ROWS:
@@ -465,4 +500,4 @@ async def parse_bug_spreadsheet(
             status_code=422, detail="The uploaded Excel file could not be read."
         ) from exc
 
-    return await _records_from_rows(rows, unsaved_formulas)
+    return await _records_from_rows(rows, unsaved_formulas, hidden_rows)
