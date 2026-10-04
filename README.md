@@ -21,7 +21,7 @@ Enter a title, description, steps to reproduce, expected result, actual result a
 
 If a screenshot shows a different page than the report describes, the report is still analyzed. The mismatch is explained in Visual Evidence and confidence is capped at 0.6.
 
-Each text field can be up to 5,000 characters. Up to 5 screenshots of at most 10 MB each can be attached, in PNG, JPEG, WEBP, GIF or BMP format.
+Each text field can be up to 5,000 characters. Up to 5 screenshots of at most 10 MB each can be attached, in PNG, JPEG, WEBP, GIF or BMP format; the page shows how many are added (for example `2/5`) and refuses larger files before uploading. A damaged image file is reported as unreadable.
 
 ### Report language
 
@@ -44,7 +44,7 @@ Short or vague reports about real software behavior (for example "It does not wo
 
 ### Batch analysis (Excel and CSV)
 
-Upload an `.xlsx`, `.xls` or `.csv` file (choose it or drag it onto the upload box) to analyze many bugs at once.
+Upload an `.xlsx`, `.xls` or `.csv` file (choose it or drag it onto the upload box) to analyze many bugs at once. The page shows the file's size and refuses files over the 5 MB limit before uploading.
 
 - **Never stops on a bad row.** Rows with missing values, unusable text or LLM errors are shown as **FAILED** with the reason, and the remaining bugs are still analyzed.
 - **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
@@ -64,7 +64,7 @@ While the service is being checked or is unavailable, the analyze buttons are di
 - Results live only in the page, so leaving or reloading it during an analysis asks for confirmation first.
 - Single bug and batch results are kept separately, so both can run at once and switching modes shows each one's last result.
 - Starting a single bug while a batch runs (or a batch while a single bug runs), in any tab, first shows a warning that it will wait for the other analysis, since Ollama handles one request at a time.
-- Light and dark themes; the choice is remembered in the browser.
+- Light and dark themes; the choice is remembered in the browser when it allows site data.
 
 ---
 
@@ -114,7 +114,7 @@ LLM call 2: report + screenshots
 Web interface
 ```
 
-The model is forced to answer with JSON that matches a Pydantic schema, so every result has the same structure.
+The model is forced to answer with JSON that matches a Pydantic schema, so every result has the same structure. An answer that still does not match is requested once more before the bug is reported as failed.
 
 ---
 
