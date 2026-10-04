@@ -11,9 +11,6 @@ from pathlib import Path
 from openpyxl import Workbook
 
 ROOT = Path(__file__).parent
-BATCH = ROOT / "batch"
-SINGLE = ROOT / "single"
-SCREENSHOTS = SINGLE / "screenshots"
 
 HEADERS = ["Title", "Description", "Steps to Reproduce", "Expected Result", "Actual Result"]
 OPTIONAL_HEADERS = ["Severity", "Priority", "Category"]
@@ -42,6 +39,12 @@ VALID_BUGS = [
     ],
 ]
 
+# Longer than the 5000 characters a field may have; also used for
+# "__LONG_LOG__" in single/single_scenarios.json.
+LONG_LOG = "The app crashes while exporting. Log: " + (
+    "java.lang.OutOfMemoryError at ReportExporter.write(ReportExporter.java:120) " * 70
+)
+
 
 def new_sheet(headers=HEADERS):
     workbook = Workbook()
@@ -51,35 +54,35 @@ def new_sheet(headers=HEADERS):
     return workbook, sheet
 
 
-def save(workbook, name):
-    workbook.save(BATCH / name)
+def save(workbook, batch, name):
+    workbook.save(batch / name)
 
 
 # --- Batch: file-level errors (the whole file is rejected) -----------------
 
 
-def missing_columns():
+def missing_columns(batch):
     workbook, sheet = new_sheet(["Title", "Description", "Steps to Reproduce"])
     for bug in VALID_BUGS:
         sheet.append(bug[:3])
-    save(workbook, "01_eksik_sutunlar.xlsx")
+    save(workbook, batch, "01_eksik_sutunlar.xlsx")
 
 
-def header_only():
+def header_only(batch):
     workbook, _ = new_sheet()
-    save(workbook, "02_sadece_baslik_satiri.xlsx")
+    save(workbook, batch, "02_sadece_baslik_satiri.xlsx")
 
 
-def all_rows_hidden():
+def all_rows_hidden(batch):
     workbook, sheet = new_sheet()
     for bug in VALID_BUGS:
         sheet.append(bug)
     for row in range(2, 2 + len(VALID_BUGS)):
         sheet.row_dimensions[row].hidden = True
-    save(workbook, "03_tum_satirlar_gizli.xlsx")
+    save(workbook, batch, "03_tum_satirlar_gizli.xlsx")
 
 
-def too_many_records():
+def too_many_records(batch):
     workbook, sheet = new_sheet()
     for number in range(1, 502):
         sheet.append([
@@ -89,18 +92,18 @@ def too_many_records():
             "Both pages show the same price.",
             f"The search page shows a price that is {number} cents lower.",
         ])
-    save(workbook, "04_500den_fazla_kayit.xlsx")
+    save(workbook, batch, "04_500den_fazla_kayit.xlsx")
 
 
-def too_many_rows():
+def too_many_rows(batch):
     workbook, sheet = new_sheet()
     # 2001 rows with data; the row limit is checked before the record limit.
     for number in range(1, 2002):
         sheet.append([f"Note {number}"])
-    save(workbook, "05_2000den_fazla_dolu_satir.xlsx")
+    save(workbook, batch, "05_2000den_fazla_dolu_satir.xlsx")
 
 
-def too_many_formatted_rows():
+def too_many_formatted_rows(batch):
     from openpyxl.styles import PatternFill
 
     workbook, sheet = new_sheet()
@@ -109,38 +112,38 @@ def too_many_formatted_rows():
     # Empty rows that only carry a fill color, far below the data.
     for row in range(3, 50010):
         sheet.cell(row=row, column=1).fill = fill
-    save(workbook, "06_50000den_fazla_bicimli_bos_satir.xlsx")
+    save(workbook, batch, "06_50000den_fazla_bicimli_bos_satir.xlsx")
 
 
-def password_protected():
+def password_protected(batch):
     # Encrypted Office files are OLE containers; the app recognizes them by
     # their first bytes. This is a stand-in, not a real encrypted file.
-    (BATCH / "07_sifreli_dosya.xlsx").write_bytes(
+    (batch / "07_sifreli_dosya.xlsx").write_bytes(
         b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 4096
     )
 
 
-def corrupt_file():
-    (BATCH / "08_bozuk_dosya.xlsx").write_bytes(
+def corrupt_file(batch):
+    (batch / "08_bozuk_dosya.xlsx").write_bytes(
         b"PK\x03\x04 this is not really a zip archive " * 50
     )
 
 
-def unsupported_format():
-    (BATCH / "09_desteklenmeyen_format.txt").write_text(
+def unsupported_format(batch):
+    (batch / "09_desteklenmeyen_format.txt").write_text(
         "Title;Description\nLogin fails;Cannot log in\n", encoding="utf-8"
     )
 
 
-def empty_file():
-    (BATCH / "10_bos_dosya.xlsx").write_bytes(b"")
+def empty_file(batch):
+    (batch / "10_bos_dosya.xlsx").write_bytes(b"")
 
 
-def too_large():
-    (BATCH / "11_5mb_ustu_dosya.xlsx").write_bytes(os.urandom(5 * 1024 * 1024 + 1024))
+def too_large(batch):
+    (batch / "11_5mb_ustu_dosya.xlsx").write_bytes(os.urandom(5 * 1024 * 1024 + 1024))
 
 
-def turkish_headers():
+def turkish_headers(batch):
     workbook, sheet = new_sheet(
         ["Başlık", "Açıklama", "Tekrar Adımları", "Beklenen Sonuç", "Gerçekleşen Sonuç"]
     )
@@ -151,14 +154,14 @@ def turkish_headers():
         "Kullanıcı giriş yapar ve panele yönlendirilir.",
         "Hiçbir şey olmuyor; konsolda TypeError görünüyor.",
     ])
-    save(workbook, "12_turkce_basliklar_ollama_gerekir.xlsx")
+    save(workbook, batch, "12_turkce_basliklar_ollama_gerekir.xlsx")
 
 
-def unmatchable_headers():
+def unmatchable_headers(batch):
     workbook, sheet = new_sheet(["Kolon A", "Kolon B", "Kolon C", "Kolon D", "Kolon E"])
     sheet.append(["1", "2", "3", "4", "5"])
     sheet.append(["6", "7", "8", "9", "10"])
-    save(workbook, "13_anlamsiz_basliklar.xlsx")
+    save(workbook, batch, "13_anlamsiz_basliklar.xlsx")
 
 
 # --- Batch: row-level errors (the file is analyzed, bad rows FAILED) -------
@@ -190,7 +193,7 @@ ROW_SCENARIOS = [
      "The confirmation email arrives.", "The confirmation email arrives.", "", "", ""),
     ("5000 karakterden uzun alan",
      "Crash when exporting a large report",
-     "The app crashes while exporting. Log: " + ("java.lang.OutOfMemoryError at ReportExporter.write(ReportExporter.java:120) " * 70),
+     LONG_LOG,
      "Open Reports\nChoose Export", "The report is exported.", "The app crashes.", "", "", ""),
     ("Tekrar eden kayıt (1. satırın kopyası)", *VALID_BUGS[0], "", "", ""),
     ("Tekrar (büyük/küçük harf ve noktalama farklı)",
@@ -210,7 +213,7 @@ ROW_SCENARIOS = [
 ]
 
 
-def row_errors():
+def row_errors(batch):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Bugs"
@@ -239,10 +242,10 @@ def row_errors():
     sheet.column_dimensions["A"].width = 42
     for column in "BCDEF":
         sheet.column_dimensions[column].width = 40
-    save(workbook, "20_satir_bazli_hatalar.xlsx")
+    save(workbook, batch, "20_satir_bazli_hatalar.xlsx")
 
 
-def csv_semicolon_cp1254():
+def csv_semicolon_cp1254(batch):
     lines = [";".join(["Senaryo", *HEADERS])]
     rows = [
         ["Geçerli (Türkçe karakterli)", "Ödeme sayfası açılmıyor",
@@ -254,13 +257,13 @@ def csv_semicolon_cp1254():
     ]
     for row in rows:
         lines.append(";".join(row))
-    (BATCH / "21_noktali_virgul_cp1254.csv").write_bytes(
+    (batch / "21_noktali_virgul_cp1254.csv").write_bytes(
         "\r\n".join(lines).encode("cp1254")
     )
 
 
-def csv_missing_column():
-    (BATCH / "22_csv_eksik_sutun.csv").write_text(
+def csv_missing_column(batch):
+    (batch / "22_csv_eksik_sutun.csv").write_text(
         "Title,Description,Steps to Reproduce,Expected Result\n"
         "Login fails,Cannot log in with a valid password,Open login page,User logs in\n",
         encoding="utf-8",
@@ -286,31 +289,42 @@ def png(width=4, height=4, color=(220, 40, 40)):
     )
 
 
-def screenshots():
-    SCREENSHOTS.mkdir(parents=True, exist_ok=True)
-    (SCREENSHOTS / "gecerli.png").write_bytes(png(64, 64))
+def screenshots(directory):
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "gecerli.png").write_bytes(png(64, 64))
     for number in range(1, 7):
-        (SCREENSHOTS / f"alti_adet_{number}.png").write_bytes(png(8, 8))
+        (directory / f"alti_adet_{number}.png").write_bytes(png(8, 8))
     # Starts like a PNG but is cut off: passes the upload check, Ollama fails.
-    (SCREENSHOTS / "hasarli_yarim.png").write_bytes(png(64, 64)[:40])
+    (directory / "hasarli_yarim.png").write_bytes(png(64, 64)[:40])
     # A text file renamed to .png: rejected by its first bytes.
-    (SCREENSHOTS / "aslinda_metin.png").write_text("This is not an image.\n")
+    (directory / "aslinda_metin.png").write_text("This is not an image.\n")
     # A PNG padded past 10 MB.
-    (SCREENSHOTS / "10mb_ustu.png").write_bytes(png(8, 8) + b"\x00" * (10 * 1024 * 1024 + 1))
+    (directory / "10mb_ustu.png").write_bytes(png(8, 8) + b"\x00" * (10 * 1024 * 1024 + 1))
+
+
+BATCH_BUILDERS = (
+    missing_columns, header_only, all_rows_hidden, too_many_records,
+    too_many_rows, too_many_formatted_rows, password_protected, corrupt_file,
+    unsupported_format, empty_file, too_large, turkish_headers,
+    unmatchable_headers, row_errors, csv_semicolon_cp1254, csv_missing_column,
+)
+
+
+def generate(root=ROOT):
+    """Write batch/ and single/screenshots/ under root; the tests use a
+    temporary root."""
+    batch = root / "batch"
+    batch.mkdir(parents=True, exist_ok=True)
+    for build in BATCH_BUILDERS:
+        build(batch)
+    screenshots(root / "single" / "screenshots")
+    return batch, root / "single" / "screenshots"
 
 
 def main():
-    BATCH.mkdir(parents=True, exist_ok=True)
-    for build in (
-        missing_columns, header_only, all_rows_hidden, too_many_records,
-        too_many_rows, too_many_formatted_rows, password_protected, corrupt_file,
-        unsupported_format, empty_file, too_large, turkish_headers,
-        unmatchable_headers, row_errors, csv_semicolon_cp1254, csv_missing_column,
-        screenshots,
-    ):
-        build()
-    print("Generated", len(list(BATCH.iterdir())), "batch files and",
-          len(list(SCREENSHOTS.iterdir())), "screenshots")
+    batch, shots = generate()
+    print("Generated", len(list(batch.iterdir())), "batch files and",
+          len(list(shots.iterdir())), "screenshots")
 
 
 if __name__ == "__main__":

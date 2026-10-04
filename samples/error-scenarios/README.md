@@ -4,6 +4,8 @@ Kullanıcının karşılaşabileceği hataları denemek için örnek Excel/CSV d
 Aşağıdaki mesajların hepsi uygulamanın gerçek endpoint'lerinden alındı (2026-10-04, `qwen3-vl:8b-instruct`).
 LLM'e bağlı mesajlar (🤖) modelin cevabına göre kelime kelime değişebilir.
 
+Aynı senaryolar `tests/test_error_scenarios.py` ile pytest'te de çalışır (LLM mock'lanır); bir mesaj değişirse test kırılır, bu tablo da güncellenmelidir.
+
 Excel/CSV dosyaları ve ekran görüntüleri repoda tutulmaz (büyük ve kasıtlı bozuk binary'ler); şu komutla üretilir:
 
 ```bash
