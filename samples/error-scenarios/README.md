@@ -12,6 +12,8 @@ The files are in the repository, except two that only exist to exceed the size l
 .venv/bin/python samples/error-scenarios/generate_samples.py
 ```
 
+> Looking for a file without errors to try the app? Use [`samples/example_bugs.xlsx`](../example_bugs.xlsx).
+
 ---
 
 ## 1. Batch analysis – the whole file is rejected

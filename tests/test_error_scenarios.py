@@ -360,3 +360,15 @@ def test_single_bug_scenario(sample_files, monkeypatch, scenario) -> None:
         assert response.json() == FAKE_ANALYSIS.model_dump()
     else:
         assert response.json() == {"detail": detail}
+
+
+def test_example_file_is_analyzed_without_errors() -> None:
+    # samples/example_bugs.xlsx is the file to try the app with.
+    example = SAMPLES.parent / "example_bugs.xlsx"
+
+    response = post_batch(example)
+
+    assert response.status_code == 200
+    bugs = response.json()["bugs"]
+    assert len(bugs) == 6
+    assert {bug["status"] for bug in bugs} == {"analyzed"}
