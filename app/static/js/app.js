@@ -1527,6 +1527,24 @@ function renderBatchResults(data) {
         resultGrid.appendChild(hiddenInfo);
     }
 
+    // A header found in more than one column: only the first is read, so
+    // values in the others are reported as missing.
+    if (data.duplicate_columns?.length) {
+        const duplicateInfo = document.createElement("div");
+        duplicateInfo.className = "result-item batch-columns-info";
+
+        const duplicateLabel = document.createElement("div");
+        duplicateLabel.className = "result-label";
+        duplicateLabel.textContent = "Duplicate columns";
+
+        const duplicateText = document.createElement("div");
+        duplicateText.className = "result-value";
+        duplicateText.textContent = data.duplicate_columns.join(" ");
+
+        duplicateInfo.append(duplicateLabel, duplicateText);
+        resultGrid.appendChild(duplicateInfo);
+    }
+
     // Shown when the Excel headers were not recognized and the LLM
     // matched them, so the user can check the matching.
     if (data.detected_columns) {

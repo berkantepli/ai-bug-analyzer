@@ -335,8 +335,9 @@ async def _run_batch(
     """Analyze records with live progress; shared by batch and retry.
 
     load_records returns the records and details for the response, such as
-    the Excel headers the LLM matched (detected_columns) and how many hidden
-    rows were skipped (skipped_hidden_rows).
+    the Excel headers the LLM matched (detected_columns), headers found in
+    more than one column (duplicate_columns) and how many hidden rows were
+    skipped (skipped_hidden_rows).
     """
     batch_id = batch_id or uuid4().hex
     if not BATCH_ID_PATTERN.fullmatch(batch_id):
@@ -406,6 +407,8 @@ async def _run_batch(
             "rejected": rejected,
             # Set when the Excel headers were matched by the LLM.
             "detected_columns": details.get("detected_columns"),
+            # Headers that appear twice; only the first column is read.
+            "duplicate_columns": details.get("duplicate_columns", []),
             "skipped_hidden_rows": details.get("skipped_hidden_rows", 0),
             # Set when Ollama became unreachable and the batch stopped
             # sending the remaining bugs.

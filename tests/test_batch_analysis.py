@@ -751,3 +751,42 @@ def test_excel_steps_are_split_like_single_bug_steps(monkeypatch) -> None:
     )
 
     assert received == [["Open login", "Submit"]]
+
+
+def test_headers_matching_the_same_field_are_reported(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [
+            (*HEADER, "Title", "Steps", "Severity"),
+            ("Login fails", "Cannot sign in", "Open login", "Signed in", "Error", "", "", ""),
+        ]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.status_code == 200
+    assert response.json()["duplicate_columns"] == [
+        'Columns A ("Bug Title") and F ("Title") both look like the title '
+        "column; only column A is read.",
+        'Columns C ("Steps to Reproduce") and G ("Steps") both look like the '
+        "steps to reproduce column; only column C is read.",
+    ]
+
+
+def test_no_duplicate_columns_without_repeated_headers(monkeypatch) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    content = excel_bytes(
+        [HEADER, ("Login fails", "Cannot sign in", "Open login", "Signed in", "Error")]
+    )
+
+    response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
+
+    assert response.json()["duplicate_columns"] == []

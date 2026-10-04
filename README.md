@@ -105,6 +105,7 @@ Use **one sheet** with a header row and one bug per row. The header row may be a
 - **Severity, Priority and Category** from your file replace the AI's values. Common values from tools such as Jira, Bugzilla, Azure DevOps and ServiceNow are understood (`Blocker` → CRITICAL, `Major` → HIGH, `Highest` → P1, `Sev 2` → HIGH, `Yüksek` → HIGH).
 - **Limits:** 5 MB, 2000 rows with data and 500 bugs per file.
 - **Hidden or filtered rows** are skipped, and the page tells you how many.
+- **Two columns for the same field** (for example two Title columns, or Title and Bug Title): only the first is read, and the page tells you which columns were ignored.
 - **CSV files** may use commas, semicolons or tabs, in UTF-8, UTF-16 or Windows Turkish encoding.
 - **Not supported:** password-protected files. Cells showing Excel errors such as `#N/A` fail with the cell named, and formulas without a saved result ask you to open and save the file in Excel.
 
