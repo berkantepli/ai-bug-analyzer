@@ -304,6 +304,7 @@ async def _records_from_rows(
     rows: list[tuple[object, ...]],
     unsaved_formulas: frozenset[tuple[int, int]] = frozenset(),
     hidden_rows: frozenset[int] = frozenset(),
+    file_type: str = "Excel",
 ) -> tuple[list[dict], dict]:
     """Return the bug records and, when the LLM matched the columns, which
     header was used for each field so the user can check it.
@@ -314,10 +315,10 @@ async def _records_from_rows(
     by a filter) are skipped, as the user does not see them.
 
     The second value holds details for the response: detected_columns and
-    skipped_hidden_rows.
+    skipped_hidden_rows. file_type ("Excel" or "CSV") is used in messages.
     """
     if not rows:
-        raise HTTPException(status_code=422, detail="The Excel file is empty.")
+        raise HTTPException(status_code=422, detail=f"The {file_type} file is empty.")
 
     header_index, indexes = _find_header(rows)
     detected_columns = None
@@ -340,7 +341,7 @@ async def _records_from_rows(
             labels = ", ".join(field.replace("_", " ") for field in missing)
             raise HTTPException(
                 status_code=422,
-                detail=f"Missing required Excel columns: {labels}.{hint}",
+                detail=f"Missing required {file_type} columns: {labels}.{hint}",
             )
 
         header_index, indexes = matched
@@ -387,14 +388,14 @@ async def _records_from_rows(
         )
         raise HTTPException(
             status_code=422,
-            detail=f"The Excel file contains no bug records.{hidden_note}",
+            detail=f"The {file_type} file contains no bug records.{hidden_note}",
         )
 
     if len(records) > MAX_BUG_RECORDS:
         raise HTTPException(
             status_code=422,
             detail=(
-                f"The Excel file contains {len(records)} bug records; "
+                f"The {file_type} file contains {len(records)} bug records; "
                 f"the maximum is {MAX_BUG_RECORDS}."
             ),
         )
@@ -423,11 +424,15 @@ def _mark_duplicates(records: list[dict]) -> None:
 
 async def parse_bug_spreadsheet(file: UploadFile) -> tuple[list[dict], dict]:
     filename = (file.filename or "").lower()
+    file_type = "CSV" if filename.endswith(".csv") else "Excel"
     content = await file.read(MAX_EXCEL_BYTES + 1)
     if len(content) > MAX_EXCEL_BYTES:
         raise HTTPException(
             status_code=413,
-            detail=f"The Excel file is larger than {MAX_EXCEL_BYTES // (1024 * 1024)} MB.",
+            detail=(
+                f"The {file_type} file is larger than "
+                f"{MAX_EXCEL_BYTES // (1024 * 1024)} MB."
+            ),
         )
 
     if not content:
@@ -439,7 +444,7 @@ async def parse_bug_spreadsheet(file: UploadFile) -> tuple[list[dict], dict]:
     hidden_rows: frozenset[int] = frozenset()
     too_many_rows = HTTPException(
         status_code=422,
-        detail=f"The Excel sheet has more than {MAX_SHEET_ROWS} rows.",
+        detail=f"The {file_type} file has more than {MAX_SHEET_ROWS} rows.",
     )
     try:
         if filename.endswith(".xlsx"):
@@ -493,11 +498,11 @@ async def parse_bug_spreadsheet(file: UploadFile) -> tuple[list[dict], dict]:
                 status_code=422, detail=PASSWORD_PROTECTED_ERROR
             ) from exc
         raise HTTPException(
-            status_code=422, detail="The uploaded Excel file could not be read."
+            status_code=422, detail=f"The uploaded {file_type} file could not be read."
         ) from exc
     except Exception as exc:
         raise HTTPException(
-            status_code=422, detail="The uploaded Excel file could not be read."
+            status_code=422, detail=f"The uploaded {file_type} file could not be read."
         ) from exc
 
-    return await _records_from_rows(rows, unsaved_formulas, hidden_rows)
+    return await _records_from_rows(rows, unsaved_formulas, hidden_rows, file_type)

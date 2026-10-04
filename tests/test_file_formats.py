@@ -101,3 +101,10 @@ def test_only_hidden_rows_explains_why_nothing_is_analyzed() -> None:
         "The Excel file contains no bug records. "
         "1 hidden rows were skipped; unhide them to analyze them."
     )
+
+
+def test_csv_messages_name_the_csv_file() -> None:
+    response = post("bugs.csv", b"Name,Notes\nx,y\n")
+
+    assert response.status_code == 422
+    assert response.json()["detail"].startswith("Missing required CSV columns:")

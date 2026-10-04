@@ -3480,7 +3480,7 @@
         function renderBatchResults(data) {
             clearResults();
             if (!data || !Array.isArray(data.bugs) || data.bugs.length === 0) {
-                showError("The Excel file did not contain any bug records.");
+                showError("The file did not contain any bug records.");
                 return;
             }
 
