@@ -3035,14 +3035,31 @@
                     .join("\n");
             }
 
+            // fetch() rejects with a TypeError when the server cannot be
+            // reached; its properties are not enumerable, so it would show
+            // as "{}".
+            if (error instanceof TypeError) {
+                return "Could not reach the analysis server. Make sure the app is still running and try again.";
+            }
+
+            if (error instanceof Error) {
+                return error.message || String(error);
+            }
+
             if (typeof error === "object") {
-                // FastAPI errors: {"detail": "..."} or a list of {"msg": "..."}
+                // FastAPI errors: {"detail": "..."} or a list of
+                // {"loc": ["body", "title"], "msg": "Field required"}
                 if ("detail" in error) {
                     return formatError(error.detail);
                 }
 
                 if (typeof error.msg === "string") {
-                    return error.msg;
+                    const field = (error.loc || [])
+                        .filter(part => !["body", "query", "path"].includes(part))
+                        .join(".")
+                        .replace(/_/g, " ");
+
+                    return field ? `${field}: ${error.msg}` : error.msg;
                 }
 
                 try {
