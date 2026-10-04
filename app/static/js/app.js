@@ -854,7 +854,6 @@ const screenshotInput = document.getElementById("screenshot");
 const screenshotFileName = document.getElementById("screenshot-file-name");
 
 const screenshotButton = document.querySelector(".screenshot-button");
-const screenshotCount = document.getElementById("screenshotCount");
 const screenshotNotice = document.getElementById("screenshotNotice");
 
 // Same limits as MAX_SCREENSHOTS and MAX_SCREENSHOT_BYTES in
@@ -902,7 +901,6 @@ function renderScreenshots() {
     screenshotFileName.innerHTML = "";
 
     const full = selectedScreenshots.length >= MAX_SCREENSHOTS;
-    screenshotCount.textContent = `${selectedScreenshots.length}/${MAX_SCREENSHOTS}`;
     screenshotInput.disabled = full;
     screenshotButton.classList.toggle("disabled", full);
 
