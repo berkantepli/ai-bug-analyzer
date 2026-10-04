@@ -1586,6 +1586,25 @@ function renderBatchResults(data) {
     const analyses = data.bugs.filter(isAnalyzedBug).map(bug => bug.analysis);
     const notAnalyzedCount = data.bugs.filter(isNotAnalyzedBug).length;
 
+    const bugStatus = bug =>
+        isDuplicateBug(bug) ? "duplicate"
+            : isNotAnalyzedBug(bug) ? "not_analyzed"
+                : isFailedBug(bug) ? "failed"
+                    : "analyzed";
+
+    // The overview tiles filter by status (one at a time) and the
+    // summary chips by value; values of one row are combined with OR,
+    // rows with AND. Only analyzed bugs have values, as in the counts.
+    const filters = {
+        status: null,
+        severity: new Set(),
+        priority: new Set(),
+        category: new Set()
+    };
+    const filterButtons = [];
+    const bugCards = [];
+    let applyFilters = () => {};
+
     const overviewHeading = document.createElement("h3");
     overviewHeading.className = "batch-summary-heading";
     overviewHeading.textContent = "Analysis Overview";
@@ -1595,16 +1614,29 @@ function renderBatchResults(data) {
     overview.className = "batch-summary";
 
     const overviewFields = [
-        ["Bugs", data.bugs.length],
-        ["Analyzed", analyses.length],
-        ["Failed", data.bugs.filter(isFailedBug).length],
-        ["Duplicates", data.bugs.filter(isDuplicateBug).length],
-        ...(notAnalyzedCount ? [["Not analyzed", notAnalyzedCount]] : [])
+        ["Bugs", data.bugs.length, null],
+        ["Analyzed", analyses.length, "analyzed"],
+        ["Failed", data.bugs.filter(isFailedBug).length, "failed"],
+        ["Duplicates", data.bugs.filter(isDuplicateBug).length, "duplicate"],
+        ...(notAnalyzedCount
+            ? [["Not analyzed", notAnalyzedCount, "not_analyzed"]]
+            : [])
     ];
 
-    overviewFields.forEach(([labelText, valueText]) => {
-        const item = document.createElement("div");
-        item.className = "result-item";
+    overviewFields.forEach(([labelText, valueText, status]) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "result-item summary-filter-tile";
+        item.disabled = status !== null && !valueText;
+        item.addEventListener("click", () => {
+            filters.status = filters.status === status ? null : status;
+            applyFilters();
+        });
+        filterButtons.push({
+            button: item,
+            // "Bugs" only clears the status filter.
+            isActive: () => status !== null && filters.status === status
+        });
 
         const label = document.createElement("div");
         label.className = "result-label";
@@ -1638,7 +1670,8 @@ function renderBatchResults(data) {
     const CATEGORY_VISIBLE_LIMIT = 5;
 
     const createSummaryChip = (key, countLabel, countValue) => {
-        const chip = document.createElement("span");
+        const chip = document.createElement("button");
+        chip.type = "button";
         chip.className = "summary-chip";
         if (key === "severity") {
             chip.classList.add(`severity-${countLabel.toLowerCase()}`);
@@ -1651,6 +1684,20 @@ function renderBatchResults(data) {
         count.className = "summary-chip-count";
         count.textContent = countValue;
         chip.append(text, count);
+
+        chip.addEventListener("click", () => {
+            const selected = filters[key];
+            if (selected.has(countLabel)) {
+                selected.delete(countLabel);
+            } else {
+                selected.add(countLabel);
+            }
+            applyFilters();
+        });
+        filterButtons.push({
+            button: chip,
+            isActive: () => filters[key].has(countLabel)
+        });
         return chip;
     };
 
@@ -1702,10 +1749,12 @@ function renderBatchResults(data) {
                 toggle.setAttribute("aria-expanded", String(expanded));
                 toggle.textContent = expanded ? "Show less" : `+${hiddenCount} more`;
 
+                // A selected category stays visible when collapsed.
                 [...chips.children]
                     .slice(CATEGORY_VISIBLE_LIMIT, countLabels.length)
                     .forEach(chip => {
-                        chip.hidden = !expanded;
+                        chip.hidden =
+                            !expanded && !chip.classList.contains("is-active");
                     });
             });
 
@@ -1721,6 +1770,67 @@ function renderBatchResults(data) {
     });
 
     resultGrid.appendChild(summary);
+
+    const filterStatus = document.createElement("div");
+    filterStatus.className = "batch-filter-status";
+    filterStatus.hidden = true;
+
+    const filterStatusText = document.createElement("span");
+    filterStatusText.setAttribute("aria-live", "polite");
+
+    const clearFiltersButton = document.createElement("button");
+    clearFiltersButton.type = "button";
+    clearFiltersButton.className = "summary-more-toggle";
+    clearFiltersButton.textContent = "Clear filters";
+    clearFiltersButton.addEventListener("click", () => {
+        filters.status = null;
+        ["severity", "priority", "category"].forEach(key => filters[key].clear());
+        applyFilters();
+    });
+
+    filterStatus.append(filterStatusText, clearFiltersButton);
+    resultGrid.appendChild(filterStatus);
+
+    const matchesFilters = bug => {
+        if (filters.status && bugStatus(bug) !== filters.status) {
+            return false;
+        }
+        return ["severity", "priority", "category"].every(key => {
+            if (!filters[key].size) {
+                return true;
+            }
+            return isAnalyzedBug(bug) &&
+                filters[key].has(bug.analysis[key] || "Unknown");
+        });
+    };
+
+    applyFilters = () => {
+        const isFiltering = Boolean(filters.status) ||
+            ["severity", "priority", "category"].some(key => filters[key].size);
+        let shownCount = 0;
+
+        bugCards.forEach(({ bug, card }) => {
+            const shown = matchesFilters(bug);
+            card.hidden = !shown;
+            if (shown) {
+                shownCount += 1;
+            }
+        });
+
+        filterButtons.forEach(({ button, isActive }) => {
+            const active = isActive();
+            button.classList.toggle("is-active", active);
+            button.setAttribute("aria-pressed", String(active));
+            if (active) {
+                button.hidden = false;
+            }
+        });
+
+        filterStatus.hidden = !isFiltering;
+        filterStatusText.textContent = shownCount
+            ? `Showing ${shownCount} of ${data.bugs.length} bugs`
+            : "No bugs match the selected filters.";
+    };
 
     // A duplicate has no analysis of its own, so it points at the
     // original and says when the original has no analysis either.
@@ -2022,7 +2132,9 @@ function renderBatchResults(data) {
             bugContent.appendChild(scenariosCard);
         }
         resultGrid.appendChild(bugCard);
+        bugCards.push({ bug, card: bugCard });
     });
+    applyFilters();
     resultCard.classList.add("visible");
 }
 
