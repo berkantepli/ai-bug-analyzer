@@ -611,6 +611,55 @@
             opacity: 0.55;
         }
 
+        /* Disabled buttons get no mouse events in some browsers, so the
+           tooltip explaining why the button is disabled sits on a wrapper. */
+        .analyze-button-wrapper {
+            position: relative;
+        }
+
+        .analyze-button-wrapper[data-tooltip]::after {
+            content: attr(data-tooltip);
+
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 9px);
+
+            max-width: 280px;
+            width: max-content;
+            padding: 8px 12px;
+
+            transform: translateX(-50%) translateY(4px);
+
+            border: 1px solid var(--border);
+            border-radius: 8px;
+
+            background: var(--card);
+            color: var(--text);
+            box-shadow: 0 8px 24px var(--shadow);
+
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.5;
+            text-align: center;
+
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+
+            transition:
+                opacity 0.15s ease,
+                transform 0.15s ease,
+                visibility 0.15s ease;
+
+            z-index: 100;
+        }
+
+        .analyze-button-wrapper[data-tooltip]:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+
         /* Results */
 
         .result-card {
@@ -1994,9 +2043,11 @@
                     </button>
                 </div>
 
-                <button id="analyzeButton" class="analyze-button" type="submit">
-                    Analyze Bug
-                </button>
+                <div class="analyze-button-wrapper">
+                    <button id="analyzeButton" class="analyze-button" type="submit">
+                        Analyze Bug
+                    </button>
+                </div>
             </form>
 
             <div id="batchAnalysis" class="batch-analysis form-card">
@@ -2032,9 +2083,11 @@
                     </button>
                 </div>
 
-                <button id="batchAnalyzeButton" class="analyze-button" type="button" disabled>
-                    Analyze Bugs
-                </button>
+                <div class="analyze-button-wrapper">
+                    <button id="batchAnalyzeButton" class="analyze-button" type="button" disabled>
+                        Analyze Bugs
+                    </button>
+                </div>
 
                 <div id="batchProgress" class="batch-progress" hidden>
 
@@ -2157,12 +2210,29 @@
         let singleAnalysisRunning = false;
         let batchAnalysisRunning = false;
 
+        // Shown on the analyze buttons while they cannot be used because of
+        // the service status.
+        const SERVICE_BUTTON_TOOLTIPS = {
+            checking: "Analysis service checking. Please wait until the check is finished.",
+            unavailable: "Analysis service unavailable. Open the ⚠ diagnosis next to the status for details."
+        };
+
         function refreshAnalyzeButtons() {
-            const serviceUsable = serviceStatus !== "unavailable";
+            const serviceUsable = serviceStatus === "available";
 
             analyzeButton.disabled = !serviceUsable || singleAnalysisRunning;
             batchAnalyzeButton.disabled =
                 !serviceUsable || batchAnalysisRunning || !batchFileInput.files[0];
+
+            const tooltip = SERVICE_BUTTON_TOOLTIPS[serviceStatus];
+            for (const button of [analyzeButton, batchAnalyzeButton]) {
+                const wrapper = button.parentElement;
+                if (tooltip) {
+                    wrapper.setAttribute("data-tooltip", tooltip);
+                } else {
+                    wrapper.removeAttribute("data-tooltip");
+                }
+            }
 
             const retryButton = document.getElementById("batchRetryButton");
             if (retryButton) {
