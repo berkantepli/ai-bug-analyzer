@@ -4,13 +4,12 @@ from urllib.error import HTTPError
 
 import pytest
 from fastapi.testclient import TestClient
-from openpyxl import Workbook
 
 from app.api import bugs
 from app.main import app
-from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
 from app.services import batch_analyzer, llm_analyzer
+from helpers import excel_bytes, FAKE_ANALYSIS, HEADER
 
 
 client = TestClient(app)
@@ -23,28 +22,8 @@ VALID_BUG = {
     "actual_result": "Application crashes.",
 }
 
-FAKE_ANALYSIS = BugAnalysis(
-    severity="HIGH",
-    priority="P2",
-    category="Functional",
-    impact="Users cannot upload images.",
-    possible_root_cause="Missing size validation.",
-    suggested_test_scenarios=[],
-    missing_information=[],
-    confidence=0.8,
-)
-
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 TIFF = b"II*\x00" + b"\x00" * 32
-
-HEADER = (
-    "Bug Title",
-    "Description",
-    "Steps to Reproduce",
-    "Expected Result",
-    "Actual Result",
-)
-
 
 @pytest.fixture
 def fake_llm(monkeypatch) -> None:
@@ -52,15 +31,6 @@ def fake_llm(monkeypatch) -> None:
         return FAKE_ANALYSIS
 
     monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
-
-
-def excel_bytes(rows) -> bytes:
-    workbook = Workbook()
-    for row in rows:
-        workbook.active.append(row)
-    output = BytesIO()
-    workbook.save(output)
-    return output.getvalue()
 
 
 # ---------------- requests from other websites ----------------

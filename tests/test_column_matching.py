@@ -1,27 +1,14 @@
-from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
-from openpyxl import Workbook
 
 from app.main import app
-from app.schemas.analysis import BugAnalysis
 from app.services import batch_analyzer
 from app.services.llm_analyzer import OllamaUnavailableError
+from helpers import excel_bytes, FAKE_ANALYSIS
 
 
 client = TestClient(app)
-
-FAKE_ANALYSIS = BugAnalysis(
-    severity="HIGH",
-    priority="P2",
-    category="Authentication",
-    impact="Users cannot sign in.",
-    possible_root_cause="Login validation fails.",
-    suggested_test_scenarios=[],
-    missing_information=[],
-    confidence=0.8,
-)
 
 TURKISH_HEADER = (
     "No",
@@ -51,15 +38,6 @@ TURKISH_MAPPING = {
     "priority": 6,
     "category": None,
 }
-
-
-def excel_bytes(rows) -> bytes:
-    workbook = Workbook()
-    for row in rows:
-        workbook.active.append(row)
-    output = BytesIO()
-    workbook.save(output)
-    return output.getvalue()
 
 
 @pytest.fixture(autouse=True)

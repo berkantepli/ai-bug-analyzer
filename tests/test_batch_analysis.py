@@ -11,33 +11,11 @@ import httpx
 
 from app.api import bugs
 from app.main import app
-from app.schemas.analysis import BugAnalysis
 from app.services.llm_analyzer import InvalidBugReportError, OllamaUnavailableError
+from helpers import excel_bytes, FAKE_ANALYSIS, HEADER
 
 
 client = TestClient(app)
-
-
-FAKE_ANALYSIS = BugAnalysis(
-    severity="HIGH",
-    priority="P2",
-    category="Authentication",
-    impact="Users cannot sign in.",
-    possible_root_cause="The login request is rejected.",
-    suggested_test_scenarios=[],
-    missing_information=[],
-    confidence=0.8,
-)
-
-
-def excel_bytes(rows: list[tuple[object, ...]]) -> bytes:
-    workbook = Workbook()
-    sheet = workbook.active
-    for row in rows:
-        sheet.append(row)
-    output = BytesIO()
-    workbook.save(output)
-    return output.getvalue()
 
 
 def test_batch_endpoint_reads_bug_reports_from_xlsx(monkeypatch) -> None:
@@ -107,15 +85,6 @@ def test_batch_endpoint_rejects_unsupported_file_types() -> None:
 
     assert response.status_code == 415
     assert ".xlsx and .xls" in response.json()["detail"]
-
-
-HEADER = (
-    "Bug Title",
-    "Description",
-    "Steps to Reproduce",
-    "Expected Result",
-    "Actual Result",
-)
 
 
 def test_batch_endpoint_marks_rows_with_missing_values_as_failed(monkeypatch) -> None:

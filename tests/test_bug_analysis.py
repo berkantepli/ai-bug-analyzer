@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.schemas.analysis import BugAnalysis
 from app.services.llm_analyzer import ContextTooLargeError, InvalidBugReportError
+from helpers import FAKE_ANALYSIS
 
 
 client = TestClient(app)
@@ -15,18 +15,6 @@ VALID_BUG = {
     "expected_result": "Image should be uploaded successfully.",
     "actual_result": "Application crashes.",
 }
-
-
-FAKE_ANALYSIS = BugAnalysis(
-    severity="CRITICAL",
-    priority="P1",
-    category="Functional",
-    impact="Users cannot change their profile photo.",
-    possible_root_cause="Missing file size validation.",
-    suggested_test_scenarios=[],
-    missing_information=[],
-    confidence=0.8,
-)
 
 
 def test_bug_analysis_endpoint_returns_analysis(monkeypatch) -> None:
