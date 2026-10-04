@@ -4,6 +4,7 @@ The sample files are generated into a temporary folder, so these tests also
 keep the messages listed in samples/error-scenarios/README.md up to date.
 """
 
+import asyncio
 import importlib.util
 import json
 from pathlib import Path
@@ -11,7 +12,9 @@ from urllib.error import URLError
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
+from app.api import bugs
 from app.main import app
 from app.services import batch_analyzer
 from app.services.llm_analyzer import (
@@ -119,11 +122,29 @@ def post_batch(path: Path):
         ),
         ("10_empty_file.xlsx", 422, "The uploaded file is empty."),
         ("11_larger_than_5mb.xlsx", 413, "The Excel file is larger than 5 MB."),
+        ("14_corrupt_file.xls", 422, "The uploaded Excel file could not be read."),
+        (
+            "15_header_below_row_20.xlsx",
+            422,
+            "Missing required Excel columns: title, description, steps to "
+            "reproduce, expected result, actual result.",
+        ),
+        ("17_excel_file_named_csv.csv", 422, "The uploaded CSV file could not be read."),
+        ("18_csv_file_named_xlsx.xlsx", 422, "The uploaded Excel file could not be read."),
+        (
+            "19_no_extension",
+            415,
+            "Only .xlsx, .xls and .csv files are supported for batch analysis.",
+        ),
         ("22_csv_missing_column.csv", 422, "Missing required CSV columns: actual result."),
     ],
 )
-def test_rejected_batch_file(sample_files, file_name, status_code, detail) -> None:
+def test_rejected_batch_file(
+    sample_files, monkeypatch, file_name, status_code, detail
+) -> None:
     batch, _ = sample_files
+    # Never reach Ollama, should a file get as far as header matching.
+    fake_column_matching(monkeypatch, {})
 
     response = post_batch(batch / file_name)
 
@@ -196,6 +217,22 @@ def test_headers_the_llm_cannot_match(sample_files, monkeypatch) -> None:
             "reproduce, expected result, actual result."
         )
     }
+
+
+def test_only_the_first_of_two_title_columns_is_read(sample_files) -> None:
+    batch, _ = sample_files
+
+    response = post_batch(batch / "16_duplicate_title_columns.xlsx")
+
+    assert response.status_code == 200
+    assert [
+        (bug["row"], bug["status"], bug["title"], bug["error"])
+        for bug in response.json()["bugs"]
+    ] == [
+        (2, "analyzed", "Login button does nothing on Safari", None),
+        # The title is only in the second Title column.
+        (3, "failed", "", "Missing required values: title."),
+    ]
 
 
 # --- Batch: rows fail, the rest of the file is analyzed --------------------
@@ -310,6 +347,19 @@ SINGLE_EXPECTED = {
         "The LLM could not analyze this bug: Could not connect to Ollama. Make "
         "sure Ollama is running on http://127.0.0.1:11434.",
     ),
+    # FastAPI's own validation error, not a message written by the app.
+    "S19": (
+        422,
+        [
+            {
+                "type": "missing",
+                "loc": ["body", "actual_result"],
+                "msg": "Field required",
+                "input": None,
+            }
+        ],
+    ),
+    "S20": (200, None),
 }
 
 FORM_FIELDS = (
@@ -328,8 +378,12 @@ def test_every_single_scenario_has_an_expected_result() -> None:
 def post_single_scenario(scenario: dict, screenshots: Path):
     by_id = {item["id"]: item for item in SINGLE_SCENARIOS}
     text = by_id[scenario["base"]] if "base" in scenario else scenario
-    data = {field: text[field] for field in FORM_FIELDS}
-    if data["description"] == "__LONG_LOG__":
+    data = {
+        field: text[field]
+        for field in FORM_FIELDS
+        if field not in scenario.get("omit", [])
+    }
+    if data.get("description") == "__LONG_LOG__":
         data["description"] = generate_samples.LONG_LOG
 
     files = [
@@ -360,6 +414,42 @@ def test_single_bug_scenario(sample_files, monkeypatch, scenario) -> None:
         assert response.json() == FAKE_ANALYSIS.model_dump()
     else:
         assert response.json() == {"detail": detail}
+
+
+# --- The page is closed or Clear is pressed during an analysis -------------
+
+
+@pytest.fixture
+def closed_page(monkeypatch) -> None:
+    async def is_disconnected(self) -> bool:
+        return True
+
+    async def slow_analysis(bug, screenshots=None):
+        await asyncio.sleep(5)
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr(Request, "is_disconnected", is_disconnected)
+    monkeypatch.setattr(bugs, "DISCONNECT_CHECK_SECONDS", 0.01)
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", slow_analysis)
+
+
+def test_closed_page_cancels_a_single_bug(closed_page) -> None:
+    by_id = {item["id"]: item for item in SINGLE_SCENARIOS}
+    data = {field: by_id["S01"][field] for field in FORM_FIELDS}
+
+    response = client.post("/bugs/analyze", data=data)
+
+    assert response.status_code == 499
+    assert response.json() == {"detail": "The request was cancelled."}
+
+
+def test_closed_page_stops_a_batch(closed_page) -> None:
+    response = post_batch(SAMPLES.parent / "example_bugs.xlsx")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["not_analyzed"] == len(data["bugs"])
+    assert {bug["status"] for bug in data["bugs"]} == {"not_analyzed"}
 
 
 def test_example_file_is_analyzed_without_errors() -> None:

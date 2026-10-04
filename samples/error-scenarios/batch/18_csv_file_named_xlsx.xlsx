@@ -1,0 +1,2 @@
+Title,Description,Steps to Reproduce,Expected Result,Actual Result
+Login button does nothing on Safari,Clicking the login button on the sign-in page has no effect in Safari 17.,Open https://app.example.com/login in Safari 17 / Enter a valid email and password / Click Login,The user is signed in and redirected to the dashboard.,Nothing happens; the console shows TypeError: undefined is not a function.
