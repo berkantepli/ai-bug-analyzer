@@ -1,87 +1,91 @@
 # AI Bug Analyzer
 
-A QA-focused tool that turns software bug reports into a structured analysis using a local vision-capable LLM (Ollama + Qwen3-VL). Analyze a single bug with optional screenshots, or a whole Excel or CSV file of bugs at once.
+AI Bug Analyzer reads a software bug report and returns a structured QA analysis: how severe the bug is, how urgent it is, what it affects, what might cause it, which tests to run and what information is missing.
 
-> **Note:** This is a learning and portfolio project. AI-generated analysis is a hypothesis and should be reviewed by a QA engineer before it is treated as a confirmed finding.
+You can analyze **one bug** (with screenshots if you have them) or a **whole Excel or CSV file** of bugs at once. Everything runs on your own computer with a local AI model ([Ollama](https://ollama.com) + Qwen3-VL), so no bug report leaves your machine.
 
----
-
-## Features
-
-### Single bug analysis
-
-Enter a title, description, steps to reproduce, expected result, actual result and optional screenshots. The result contains:
-
-- **Severity** (`LOW` / `MEDIUM` / `HIGH` / `CRITICAL`) and **Priority** (`P1`–`P4`)
-- **Category**, **Impact** and **Possible Root Cause**
-- **Suggested Test Scenarios**: ID, category, type, scenario, expected result, purpose and priority
-- **Missing Information** that would help investigate the bug
-- **Confidence** (0.0–1.0)
-- **Visual Evidence**: what the screenshot shows and how it relates to the report
-
-If a screenshot shows a different page than the report describes, the report is still analyzed. The mismatch is explained in Visual Evidence and confidence is capped at 0.6.
-
-Steps to reproduce are written one per line, with or without list markers such as `1.`, `2)`, `-`, `•`, `a)` or `Step 3:`; the markers are removed and the steps are numbered for the model, while values such as `1.5 GB` or `10.0.0.1` stay intact. The same applies to steps in Excel and CSV files.
-
-Each text field can be up to 5,000 characters. Up to 5 screenshots of at most 10 MB each can be attached, in PNG, JPEG, WEBP, GIF or BMP format; the page shows how many are added (for example `2/5`) and refuses larger files before uploading. A damaged image file is reported as unreadable.
-
-### Report language
-
-The analysis is written in the language of the report (for example English, Turkish or German). Quoted UI text such as button labels or error messages does not change the detected language. Severity, priority and category always stay in English so results can be grouped across reports.
-
-### Input checks
-
-Low-quality input is rejected with a clear reason instead of producing a misleading analysis:
-
-| Check | Example | Done by |
-|---|---|---|
-| Empty field or only spaces | A blank Expected Result | Backend, before the LLM |
-| Unreadable text | `Xq7#vL@`, `asdkj qweoiu`, `asdfasdf`, `aaaaaa` | Backend, before the LLM |
-| Placeholder text | `test test`, `lorem ipsum`, `n/a` | Backend, before the LLM |
-| Field longer than 5,000 characters | A pasted log file | Backend, before the LLM |
-| Same text in two or more fields | Expected result = actual result | Backend, before the LLM |
-| Not a meaningful bug report | Nonsense sentences, a cake recipe | LLM |
-
-Short or vague reports about real software behavior (for example "It does not work") are still analyzed, with low confidence and a list of missing information. Logs, stack traces, URLs, versions and error codes count as readable text.
-
-### Batch analysis (Excel and CSV)
-
-Upload an `.xlsx`, `.xls` or `.csv` file (choose it or drag it onto the upload box) to analyze many bugs at once. The page shows the file's size and refuses files over the 5 MB limit before uploading.
-
-- **Never stops on a bad row.** Rows with missing values, unusable text or LLM errors are shown as **FAILED** with the reason, and the remaining bugs are still analyzed.
-- **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
-- **Stops when Ollama goes away.** If Ollama becomes unreachable, the remaining bugs are marked **NOT ANALYZED** instead of each waiting for a timeout, and a **Retry not analyzed bugs** button analyzes only those once Ollama is back. Bugs that failed because the LLM gave an unusable answer (after one automatic second try) can be retried the same way.
-- **Live progress** with elapsed time. Each browser tab tracks its own batch, so several batches can run at the same time; their requests take turns at Ollama.
-- **Can be cancelled.** Clear cancels a running analysis, and closing or reloading the page stops the batch on the server, so Ollama is not kept busy with results nobody sees.
-- **Summary** of analyzed, failed, duplicate and not analyzed bugs, with severity, priority and category counts.
-
-### Service diagnosis
-
-The page shows whether the analysis service is available and keeps it up to date: it notices when Ollama stops and switches back to available on its own when Ollama returns. A diagnosis view checks Ollama, the required model and a real inference call, and suggests a fix for each failing step.
-
-While the service is being checked or is unavailable, the analyze buttons are disabled; hovering over them shows why.
-
-### Web interface
-
-- Results live only in the page, so leaving or reloading it during an analysis asks for confirmation first.
-- Single bug and batch results are kept separately, so both can run at once and switching modes shows each one's last result.
-- Starting a single bug while a batch runs (or a batch while a single bug runs), in any tab, first shows a warning that it will wait for the other analysis, since Ollama handles one request at a time.
-- **Export Excel** downloads the result shown on screen as an `.xlsx` report. A single bug report holds the bug, its analysis and the test scenarios; a batch report has a summary sheet, one row per bug with its status (analyzed, failed, duplicate or not analyzed) and the reason, and a sheet of all test scenarios.
-- Light and dark themes; the choice is remembered in the browser when it allows site data.
+> **Note:** This is a learning and portfolio project. The AI's analysis is a suggestion; a QA engineer should review it before treating it as a confirmed finding.
 
 ---
 
-## Excel and CSV format
+## Quick start
 
-- The file must contain **a single sheet**; only the active sheet is read.
-- CSV files may use commas, semicolons or tabs, in UTF-8, UTF-16 or Windows Turkish (cp1254) encoding; a `sep=;` first line written by Excel is understood.
-- Hidden rows, including rows hidden by a filter, are skipped; the number of skipped rows is shown above the results.
-- Password-protected files cannot be read; remove the password first.
-- Limits: at most **5 MB**, **2000 rows with data** in the sheet (empty formatted rows below the data are ignored) and **500 bug records**.
-- The header row may be anywhere in the **first 20 rows**, so report titles or notes can sit above it.
-- The English headers below are recognized directly (case and punctuation do not matter). Headers in other languages or with other names (for example `Başlık`, `Beschreibung`) are matched by the LLM, which needs Ollama; the matching is shown above the results so it can be checked:
+You need **Python 3.9+** and **[Ollama](https://ollama.com)**.
 
-| Field | Required | Accepted headers |
+```bash
+# 1. Get the code and install it
+git clone https://github.com/berkantepli/ai-bug-analyzer.git
+cd ai-bug-analyzer
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# 2. Download the AI model (about 6 GB)
+ollama pull qwen3-vl:8b-instruct
+
+# 3. Start the app
+uvicorn app.main:app --reload
+```
+
+Open <http://127.0.0.1:8000>. The bar at the top shows whether the analysis service is ready. If it says **Unavailable**, click the ⚠ icon next to it to see what is wrong and how to fix it.
+
+---
+
+## How to use it
+
+### Analyze one bug
+
+1. Open the **Single Bug** tab.
+2. Fill in the title, description, steps to reproduce, expected result and actual result.
+   Write one step per line; numbering such as `1.` or `-` is optional.
+3. Optionally add up to **5 screenshots** (PNG, JPEG, WEBP, GIF or BMP, at most 10 MB each).
+4. Click **Analyze Bug**. A single bug takes about 20–50 seconds.
+
+### Analyze a file of bugs
+
+1. Open the **Batch Analysis** tab.
+2. Choose or drag in an `.xlsx`, `.xls` or `.csv` file (at most 5 MB). See [File format](#file-format) below.
+3. Click **Analyze Bugs** and follow the progress bar.
+
+### What you get
+
+For each bug:
+
+| Result | What it means |
+|---|---|
+| **Severity** | `LOW`, `MEDIUM`, `HIGH` or `CRITICAL` |
+| **Priority** | `P1` (most urgent) to `P4` |
+| **Category** | The functional area, for example Authentication |
+| **Impact** | What the bug means for users or the business |
+| **Possible Root Cause** | A likely cause, as a hypothesis |
+| **Suggested Test Scenarios** | Tests to verify the fix, with type and priority |
+| **Missing Information** | What the report should add to make the bug easier to investigate |
+| **Confidence** | How sure the analysis is (0–100%) |
+| **Visual Evidence** | What the screenshots show (only when screenshots are added) |
+
+A batch result also shows a summary: how many bugs were analyzed, failed or repeated, and how they split by severity, priority and category.
+
+Click **⬇ Export Excel** to download the result as an `.xlsx` report.
+
+---
+
+## Good to know
+
+- **Any language.** The analysis is written in the language of the report, for example English, Turkish or German. Severity, priority and category stay in English so results can be compared.
+- **Poor input is rejected with a reason**: empty fields, random characters (`asdfasdf`), placeholder text (`test test`, `lorem ipsum`), the same text in two fields, or text that is not a bug report at all. Short but real reports such as "It does not work" are still analyzed, with low confidence.
+- **Screenshots of another page** do not block the analysis; the mismatch is explained and confidence is lowered.
+- **In a batch, one bad row never stops the rest.** Problem rows are marked **FAILED** with the reason; hover over the badge to read it. Repeated bugs are marked **DUPLICATE OF BUG N** and are not analyzed twice.
+- **If Ollama stops during a batch,** the remaining bugs are marked **NOT ANALYZED**. When Ollama is back, the **Retry** button analyzes only those, without uploading the file again.
+- **One thing at a time.** Ollama handles one request at a time. Starting a single bug while a batch runs (or the other way round) shows a warning that it will wait.
+- **Results live in the page.** Clear cancels a running analysis, and leaving the page asks for confirmation first. Export to Excel to keep a result.
+
+---
+
+## File format
+
+Use **one sheet** with a header row and one bug per row. The header row may be anywhere in the first 20 rows.
+
+| Column | Required | Recognized headers |
 |---|---|---|
 | Title | ✅ | Title, Bug Title, Bug Name |
 | Description | ✅ | Description, Bug Description |
@@ -92,7 +96,12 @@ While the service is being checked or is unavailable, the analyze buttons are di
 | Priority | – | Priority, Bug Priority, Issue Priority |
 | Category | – | Category, Bug Category, Type, Bug Type |
 
-When the optional Severity or Priority columns are filled, their values replace the ones suggested by the LLM. Common values from tools such as Jira, Bugzilla, Azure DevOps and ServiceNow are mapped to the app's scale (for example `Blocker` → CRITICAL, `Major` → HIGH, `Highest` → P1, `Sev 2` → HIGH, Turkish `Yüksek` → HIGH); unknown values are ignored and the LLM's value is kept. A filled Category column replaces the LLM's category. Numbers, percentages and dates are read as displayed in Excel (`404`, `15%`, `2026-10-02`).
+- **Headers in other languages** (for example `Başlık`, `Beschreibung`) are matched by the AI. The page shows which column was used for which field so you can check it.
+- **Severity, Priority and Category** from your file replace the AI's values. Common values from tools such as Jira, Bugzilla, Azure DevOps and ServiceNow are understood (`Blocker` → CRITICAL, `Major` → HIGH, `Highest` → P1, `Sev 2` → HIGH, `Yüksek` → HIGH).
+- **Limits:** 5 MB, 2000 rows with data and 500 bugs per file.
+- **Hidden or filtered rows** are skipped, and the page tells you how many.
+- **CSV files** may use commas, semicolons or tabs, in UTF-8, UTF-16 or Windows Turkish encoding.
+- **Not supported:** password-protected files. Cells showing Excel errors such as `#N/A` fail with the cell named, and formulas without a saved result ask you to open and save the file in Excel.
 
 ---
 
@@ -102,153 +111,77 @@ When the optional Severity or Priority columns are filled, their values replace 
 Bug report (+ screenshots)
         │
         ▼
-Backend checks ──────────────▶ rejected: unreadable / placeholder / identical fields
+Quick checks in the app ─────▶ rejected: empty, unreadable, placeholder or repeated text
         │
         ▼
-LLM call 1: text only ───────▶ rejected: not a meaningful bug report
-  detects the report language
-  and judges whether the text is a bug report
+AI step 1: read the text ────▶ rejected: not a real bug report
+  and detect its language
         │
         ▼
-LLM call 2: report + screenshots
-  structured analysis in the detected language
+AI step 2: analyze the report and the screenshots
+  in the detected language
         │
         ▼
-Web interface
+Result in the page (and as an Excel report)
 ```
 
-The model is forced to answer with JSON that matches a Pydantic schema, so every result has the same structure. An answer that still does not match is requested once more before the bug is reported as failed.
+The AI must answer in a fixed JSON format, so every result has the same fields. An answer that does not fit is requested once more before the bug is marked as failed.
 
 ---
 
-## Tech stack
+## Security and limitations
 
-- **Backend:** Python 3.9+, FastAPI, Pydantic, Uvicorn
-- **LLM:** Ollama with `qwen3-vl:8b-instruct`
-- **Frontend:** plain HTML, CSS and JavaScript, no build step
-- **Excel and CSV:** openpyxl (`.xlsx`), xlrd (`.xls`), Python's csv module
-- **Tests:** pytest, HTTPX
+The app is meant to run **on your own computer for one user**:
+
+- It has **no login**. Keep the default address (`127.0.0.1`) and do not start it with `--host 0.0.0.0` on a shared network.
+- Other websites open in your browser cannot start analyses.
+- Uploads are limited in size and type, and Excel files are read safely.
+- A bug report could contain instructions aimed at the AI. The app tells the AI to ignore them, but do not trust the analysis of reports from unknown sources blindly.
+- A local 8B model is slower than cloud AI: a batch of hundreds of bugs can take hours.
+- The results are suggestions, not confirmed defects or root causes.
 
 ---
 
-## Project structure
+## For developers
+
+**Tech stack:** Python, FastAPI, Pydantic, Ollama (`qwen3-vl:8b-instruct`), openpyxl and xlrd for spreadsheets, plain HTML/CSS/JavaScript without a build step, pytest.
+
+**Configuration:** The Ollama address, model name and context window are in `app/config.py`. The app asks Ollama for a 16,384-token context window so reports with several screenshots fit; the model then uses about 7.7 GB of memory.
+
+**Tests:** Run `pytest`. The AI is mocked, so Ollama does not need to run. Sample files for the errors users can run into are in [`samples/error-scenarios`](samples/error-scenarios).
+
+**Project structure:**
 
 ```text
 app/
-├── api/
-│   ├── bugs.py              # /bugs endpoints: single, batch, retry, progress
-│   └── health.py            # /health endpoints and service diagnosis
-├── schemas/
-│   ├── analysis.py          # BugAnalysis result schema
-│   └── bug.py               # BugReportCreate input schema
+├── api/bugs.py              # Analysis, batch, retry and Excel export endpoints
+├── api/health.py            # Service status and diagnosis
 ├── services/
 │   ├── llm_analyzer.py      # Prompts and Ollama calls
-│   ├── batch_analyzer.py    # Excel/CSV parsing, header detection, duplicates
-│   ├── excel_values.py      # Severity and priority value mapping
-│   ├── readability.py       # Unreadable, placeholder and identical-field checks
-│   ├── report.py            # Excel reports of the results
-│   └── steps.py             # Splitting steps to reproduce into steps
-├── static/
-│   ├── css/styles.css       # Styles, light and dark theme
-│   ├── js/app.js            # Page logic and API calls
-│   └── images/logo.png
-├── templates/index.html     # Web interface markup
-├── config.py                # Ollama URL and model
-└── main.py                  # FastAPI app
-tests/                       # pytest suite (the LLM is mocked)
+│   ├── batch_analyzer.py    # Reading Excel and CSV files
+│   ├── readability.py       # Checks for unusable text
+│   ├── steps.py             # Splitting steps to reproduce
+│   ├── excel_values.py      # Mapping severity and priority values
+│   └── report.py            # Excel reports
+├── schemas/                 # Input and result formats
+├── static/                  # CSS, JavaScript and images
+├── templates/index.html     # The page
+└── main.py                  # App setup
+tests/                       # pytest suite
 ```
 
----
+**API** (interactive docs at `/docs` while the app runs):
 
-## API
-
-| Method | Endpoint | Description |
+| Method | Endpoint | Purpose |
 |---|---|---|
-| `POST` | `/bugs/analyze` | Analyze one bug (form fields + optional `screenshots`) |
-| `POST` | `/bugs/batch` | Analyze an Excel or CSV file (`file`, optional `batch_id`) |
-| `POST` | `/bugs/batch/retry` | Analyze bugs again from an earlier batch result (JSON) |
+| `POST` | `/bugs/analyze` | Analyze one bug |
+| `POST` | `/bugs/batch` | Analyze an Excel or CSV file |
+| `POST` | `/bugs/batch/retry` | Analyze bugs from an earlier batch again |
 | `GET` | `/bugs/batch/{batch_id}/progress` | Progress of a running batch |
-| `GET` | `/bugs/activity` | Whether a single bug or batch analysis is running in any tab |
-| `POST` | `/bugs/export/single` | Excel report of a single bug result (JSON) |
-| `POST` | `/bugs/export/batch` | Excel report of a batch result (JSON) |
-| `GET` | `/health` | Application health |
-| `GET` | `/health/ollama` | Light check that Ollama and the model are available (no inference) |
-| `GET` | `/health/analysis` | Whether the analysis service is available |
-| `GET` | `/health/analysis/diagnose` | Step-by-step diagnosis with suggested fixes |
-
-Interactive API docs are available at `/docs` while the app is running.
-
----
-
-## Setup
-
-**1. Clone and install**
-
-```bash
-git clone https://github.com/berkantepli/ai-bug-analyzer.git
-cd ai-bug-analyzer
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-**2. Install Ollama and pull the model**
-
-```bash
-ollama pull qwen3-vl:8b-instruct
-```
-
-Ollama must be running at `http://127.0.0.1:11434`. The URL, model name and context window can be changed in `app/config.py`.
-
-The app asks Ollama for a 16,384-token context window instead of its 4,096-token default, so reports with several screenshots fit. With this setting the model uses about 7.7 GB of memory instead of 5.8 GB.
-
-**3. Run the app**
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Open <http://127.0.0.1:8000>.
-
----
-
-## Tests
-
-```bash
-pytest
-```
-
-The tests mock the LLM, so Ollama does not need to be running.
-
----
-
-## Security
-
-The app is built to run **locally for a single user**:
-
-- It has **no authentication**. Keep the default host (`127.0.0.1`) and do not start it with `--host 0.0.0.0` on a shared network; anyone who can reach it could use your LLM.
-- Requests from other websites to the analysis endpoints are rejected, so a page open in your browser cannot start analyses in the background.
-- Uploads are limited in size and type, and Excel files are parsed with `defusedxml` to block XML bombs.
-- Text from Ollama and the model is escaped before it is shown in the page.
-- Unexpected errors return a generic message; the details are written only to the server log.
-- Bug reports can contain instructions aimed at the model (prompt injection). The prompts tell the model to ignore them, but analysis of reports written by others should not be trusted blindly.
-
----
-
-## Limitations
-
-- Analysis runs on a local 8B model: a single bug takes about 20–50 seconds, so a large batch can take a long time. Ollama handles one request at a time, so a single bug analyzed during a batch waits for its turn.
-- Very large screenshots use many tokens; if a report and its screenshots still do not fit into the context window, the analysis is rejected with a message asking for fewer screenshots or a shorter text.
-- Matching non-English Excel headers needs Ollama and adds a few seconds; if the LLM cannot match every required column, the file is rejected.
-- Cells showing Excel errors such as `#N/A` or `#REF!` are not sent to the LLM; the row fails with the cell named.
-- Formula cells are read from the results Excel stores when it saves a file. Files written by scripts often contain formulas without results; such rows are marked as failed with a request to open and save the file in Excel. Formulas are not calculated by the app itself.
-- AI results are suggestions, not verified defects or confirmed root causes.
-
----
-
-## Future improvements
-
-- Persistent analysis history
+| `GET` | `/bugs/activity` | Whether an analysis is running |
+| `POST` | `/bugs/export/single` | Excel report of a single bug result |
+| `POST` | `/bugs/export/batch` | Excel report of a batch result |
+| `GET` | `/health/analysis/diagnose` | Step-by-step service diagnosis |
 
 ---
 
