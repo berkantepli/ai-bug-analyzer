@@ -148,7 +148,9 @@ The app is meant to run **on your own computer for one user**:
 
 **Configuration:** The Ollama address, model name and context window are in `app/config.py`. The app asks Ollama for a 16,384-token context window so reports with several screenshots fit; the model then uses about 7.7 GB of memory.
 
-**Tests:** Run `pytest`. The AI is mocked, so Ollama does not need to run. Sample files for the errors users can run into are in [`samples/error-scenarios`](samples/error-scenarios).
+**Tests:** Run `pytest`. The AI is mocked, so Ollama does not need to run.
+
+**Sample files:** [`samples/error-scenarios`](samples/error-scenarios) has an Excel, CSV or screenshot file for each error a user can run into, with the message the app gives for each one.
 
 **Project structure:**
 

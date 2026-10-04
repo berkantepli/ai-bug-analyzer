@@ -60,7 +60,7 @@ def fake_llm(monkeypatch) -> None:
     async def fake_analyze_with_llm(bug, screenshots=None):
         if bug.title in NOT_A_BUG_REPORT:
             raise InvalidBugReportError(NOT_A_BUG_REPORT[bug.title])
-        if any(shot.filename == "hasarli_yarim.png" for shot in screenshots or []):
+        if any(shot.filename == "truncated.png" for shot in screenshots or []):
             raise UnreadableScreenshotError(DAMAGED_SCREENSHOT_ERROR)
         return FAKE_ANALYSIS
 
@@ -78,48 +78,48 @@ def post_batch(path: Path):
     ("file_name", "status_code", "detail"),
     [
         (
-            "01_eksik_sutunlar.xlsx",
+            "01_missing_columns.xlsx",
             422,
             "Missing required Excel columns: expected result, actual result.",
         ),
-        ("02_sadece_baslik_satiri.xlsx", 422, "The Excel file contains no bug records."),
+        ("02_header_row_only.xlsx", 422, "The Excel file contains no bug records."),
         (
-            "03_tum_satirlar_gizli.xlsx",
+            "03_all_rows_hidden.xlsx",
             422,
             "The Excel file contains no bug records. 3 hidden rows were skipped; "
             "unhide them to analyze them.",
         ),
         (
-            "04_500den_fazla_kayit.xlsx",
+            "04_more_than_500_bugs.xlsx",
             422,
             "The Excel file contains 501 bug records; the maximum is 500.",
         ),
         (
-            "05_2000den_fazla_dolu_satir.xlsx",
+            "05_more_than_2000_rows.xlsx",
             422,
             "The Excel file has more than 2000 rows with data.",
         ),
         (
-            "06_50000den_fazla_bicimli_bos_satir.xlsx",
+            "06_more_than_50000_formatted_rows.xlsx",
             422,
             "The Excel file has more than 50000 rows, including empty formatted "
             "rows. Delete the unused rows below the data and try again.",
         ),
         (
-            "07_sifreli_dosya.xlsx",
+            "07_password_protected.xlsx",
             422,
             "The Excel file is password-protected. Remove the password, save the "
             "file and upload it again.",
         ),
-        ("08_bozuk_dosya.xlsx", 422, "The uploaded Excel file could not be read."),
+        ("08_corrupt_file.xlsx", 422, "The uploaded Excel file could not be read."),
         (
-            "09_desteklenmeyen_format.txt",
+            "09_unsupported_format.txt",
             415,
             "Only .xlsx, .xls and .csv files are supported for batch analysis.",
         ),
-        ("10_bos_dosya.xlsx", 422, "The uploaded file is empty."),
-        ("11_5mb_ustu_dosya.xlsx", 413, "The Excel file is larger than 5 MB."),
-        ("22_csv_eksik_sutun.csv", 422, "Missing required CSV columns: actual result."),
+        ("10_empty_file.xlsx", 422, "The uploaded file is empty."),
+        ("11_larger_than_5mb.xlsx", 413, "The Excel file is larger than 5 MB."),
+        ("22_csv_missing_column.csv", 422, "Missing required CSV columns: actual result."),
     ],
 )
 def test_rejected_batch_file(sample_files, file_name, status_code, detail) -> None:
@@ -153,7 +153,7 @@ def test_turkish_headers_are_matched_by_the_llm(sample_files, monkeypatch) -> No
         },
     )
 
-    response = post_batch(batch / "12_turkce_basliklar_ollama_gerekir.xlsx")
+    response = post_batch(batch / "12_turkish_headers_need_ollama.xlsx")
 
     assert response.status_code == 200
     data = response.json()
@@ -171,7 +171,7 @@ def test_turkish_headers_need_ollama(sample_files, monkeypatch) -> None:
     batch, _ = sample_files
     fake_column_matching(monkeypatch, error=OllamaUnavailableError("down"))
 
-    response = post_batch(batch / "12_turkce_basliklar_ollama_gerekir.xlsx")
+    response = post_batch(batch / "12_turkish_headers_need_ollama.xlsx")
 
     assert response.status_code == 422
     assert response.json() == {
@@ -187,7 +187,7 @@ def test_headers_the_llm_cannot_match(sample_files, monkeypatch) -> None:
     batch, _ = sample_files
     fake_column_matching(monkeypatch, {})
 
-    response = post_batch(batch / "13_anlamsiz_basliklar.xlsx")
+    response = post_batch(batch / "13_unrecognized_headers.xlsx")
 
     assert response.status_code == 422
     assert response.json() == {
@@ -204,7 +204,7 @@ def test_headers_the_llm_cannot_match(sample_files, monkeypatch) -> None:
 def test_row_level_errors(sample_files) -> None:
     batch, _ = sample_files
 
-    response = post_batch(batch / "20_satir_bazli_hatalar.xlsx")
+    response = post_batch(batch / "20_row_level_errors.xlsx")
 
     assert response.status_code == 200
     data = response.json()
@@ -258,7 +258,7 @@ def test_row_level_errors(sample_files) -> None:
 def test_semicolon_csv_in_turkish_encoding(sample_files) -> None:
     batch, _ = sample_files
 
-    response = post_batch(batch / "21_noktali_virgul_cp1254.csv")
+    response = post_batch(batch / "21_semicolon_turkish_encoding.csv")
 
     assert response.status_code == 200
     bugs = response.json()["bugs"]
@@ -300,10 +300,10 @@ SINGLE_EXPECTED = {
     "S14": (422, "At most 5 screenshots can be uploaded."),
     "S15": (
         415,
-        "Screenshot 'aslinda_metin.png' is not a supported image "
+        "Screenshot 'not_an_image.png' is not a supported image "
         "(PNG, JPEG, WEBP, GIF or BMP).",
     ),
-    "S16": (413, "Screenshot '10mb_ustu.png' is larger than 10 MB."),
+    "S16": (413, "Screenshot 'larger_than_10mb.png' is larger than 10 MB."),
     "S17": (422, DAMAGED_SCREENSHOT_ERROR),
     "S18": (
         503,

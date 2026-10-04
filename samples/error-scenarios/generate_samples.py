@@ -65,12 +65,12 @@ def missing_columns(batch):
     workbook, sheet = new_sheet(["Title", "Description", "Steps to Reproduce"])
     for bug in VALID_BUGS:
         sheet.append(bug[:3])
-    save(workbook, batch, "01_eksik_sutunlar.xlsx")
+    save(workbook, batch, "01_missing_columns.xlsx")
 
 
 def header_only(batch):
     workbook, _ = new_sheet()
-    save(workbook, batch, "02_sadece_baslik_satiri.xlsx")
+    save(workbook, batch, "02_header_row_only.xlsx")
 
 
 def all_rows_hidden(batch):
@@ -79,7 +79,7 @@ def all_rows_hidden(batch):
         sheet.append(bug)
     for row in range(2, 2 + len(VALID_BUGS)):
         sheet.row_dimensions[row].hidden = True
-    save(workbook, batch, "03_tum_satirlar_gizli.xlsx")
+    save(workbook, batch, "03_all_rows_hidden.xlsx")
 
 
 def too_many_records(batch):
@@ -92,7 +92,7 @@ def too_many_records(batch):
             "Both pages show the same price.",
             f"The search page shows a price that is {number} cents lower.",
         ])
-    save(workbook, batch, "04_500den_fazla_kayit.xlsx")
+    save(workbook, batch, "04_more_than_500_bugs.xlsx")
 
 
 def too_many_rows(batch):
@@ -100,7 +100,7 @@ def too_many_rows(batch):
     # 2001 rows with data; the row limit is checked before the record limit.
     for number in range(1, 2002):
         sheet.append([f"Note {number}"])
-    save(workbook, batch, "05_2000den_fazla_dolu_satir.xlsx")
+    save(workbook, batch, "05_more_than_2000_rows.xlsx")
 
 
 def too_many_formatted_rows(batch):
@@ -112,35 +112,35 @@ def too_many_formatted_rows(batch):
     # Empty rows that only carry a fill color, far below the data.
     for row in range(3, 50010):
         sheet.cell(row=row, column=1).fill = fill
-    save(workbook, batch, "06_50000den_fazla_bicimli_bos_satir.xlsx")
+    save(workbook, batch, "06_more_than_50000_formatted_rows.xlsx")
 
 
 def password_protected(batch):
     # Encrypted Office files are OLE containers; the app recognizes them by
     # their first bytes. This is a stand-in, not a real encrypted file.
-    (batch / "07_sifreli_dosya.xlsx").write_bytes(
+    (batch / "07_password_protected.xlsx").write_bytes(
         b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 4096
     )
 
 
 def corrupt_file(batch):
-    (batch / "08_bozuk_dosya.xlsx").write_bytes(
+    (batch / "08_corrupt_file.xlsx").write_bytes(
         b"PK\x03\x04 this is not really a zip archive " * 50
     )
 
 
 def unsupported_format(batch):
-    (batch / "09_desteklenmeyen_format.txt").write_text(
+    (batch / "09_unsupported_format.txt").write_text(
         "Title;Description\nLogin fails;Cannot log in\n", encoding="utf-8"
     )
 
 
 def empty_file(batch):
-    (batch / "10_bos_dosya.xlsx").write_bytes(b"")
+    (batch / "10_empty_file.xlsx").write_bytes(b"")
 
 
 def too_large(batch):
-    (batch / "11_5mb_ustu_dosya.xlsx").write_bytes(os.urandom(5 * 1024 * 1024 + 1024))
+    (batch / "11_larger_than_5mb.xlsx").write_bytes(os.urandom(5 * 1024 * 1024 + 1024))
 
 
 def turkish_headers(batch):
@@ -154,14 +154,14 @@ def turkish_headers(batch):
         "Kullanıcı giriş yapar ve panele yönlendirilir.",
         "Hiçbir şey olmuyor; konsolda TypeError görünüyor.",
     ])
-    save(workbook, batch, "12_turkce_basliklar_ollama_gerekir.xlsx")
+    save(workbook, batch, "12_turkish_headers_need_ollama.xlsx")
 
 
 def unmatchable_headers(batch):
-    workbook, sheet = new_sheet(["Kolon A", "Kolon B", "Kolon C", "Kolon D", "Kolon E"])
+    workbook, sheet = new_sheet(["Column A", "Column B", "Column C", "Column D", "Column E"])
     sheet.append(["1", "2", "3", "4", "5"])
     sheet.append(["6", "7", "8", "9", "10"])
-    save(workbook, batch, "13_anlamsiz_basliklar.xlsx")
+    save(workbook, batch, "13_unrecognized_headers.xlsx")
 
 
 # --- Batch: row-level errors (the file is analyzed, bad rows FAILED) -------
@@ -169,46 +169,46 @@ def unmatchable_headers(batch):
 
 ROW_SCENARIOS = [
     # (label, title, description, steps, expected, actual, severity, priority, category)
-    ("Geçerli", *VALID_BUGS[0], "Blocker", "Highest", "UI"),
-    ("Eksik değer (Expected boş)",
+    ("Valid", *VALID_BUGS[0], "Blocker", "Highest", "UI"),
+    ("Missing value (Expected Result empty)",
      "Search returns no results for exact names",
      "Searching for an existing product by its exact name returns nothing.",
      "Open the search page\nType 'Blue Kettle'\nPress Enter",
      "", "The page says 'No results found'.", "", "", ""),
-    ("Sadece boşluk",
+    ("Only spaces",
      "Logout link missing on mobile", "   ",
      "Open the app on a phone\nOpen the menu", "A Logout link is shown.",
      "There is no Logout link in the menu.", "", "", ""),
-    ("Okunamaz metin",
+    ("Unreadable text",
      "Xq7#vL@ zzkq", "asdkj qweoiu zxcvb", "asdfasdf", "aaaaaa", "qwrtzp mnbvc", "", "", ""),
-    ("Placeholder metin",
+    ("Placeholder text",
      "test", "test test", "test", "n/a", "tbd", "", "", ""),
     ("Lorem ipsum",
      "Lorem ipsum dolor", "Lorem ipsum dolor sit amet consectetur.",
      "Lorem\nIpsum", "Dolor sit amet.", "Consectetur adipiscing elit.", "", "", ""),
-    ("Aynı metin (Expected = Actual)",
+    ("Same text (Expected = Actual)",
      "Order confirmation email not sent",
      "After placing an order no confirmation email arrives.",
      "Place an order\nCheck the inbox",
      "The confirmation email arrives.", "The confirmation email arrives.", "", "", ""),
-    ("5000 karakterden uzun alan",
+    ("Field longer than 5000 characters",
      "Crash when exporting a large report",
      LONG_LOG,
      "Open Reports\nChoose Export", "The report is exported.", "The app crashes.", "", "", ""),
-    ("Tekrar eden kayıt (1. satırın kopyası)", *VALID_BUGS[0], "", "", ""),
-    ("Tekrar (büyük/küçük harf ve noktalama farklı)",
+    ("Duplicate (copy of the first bug)", *VALID_BUGS[0], "", "", ""),
+    ("Duplicate (different case and punctuation)",
      VALID_BUGS[0][0].upper(), VALID_BUGS[0][1].replace(".", "!!"), *VALID_BUGS[0][2:], "", "", ""),
-    ("Bug raporu değil (LLM reddeder)",
+    ("Not a bug report (rejected by the LLM)",
      "Chocolate cake recipe",
      "Mix flour, sugar, cocoa and eggs, then bake for 35 minutes at 180 degrees.",
      "Preheat the oven\nMix the ingredients\nBake",
      "A soft and moist cake.", "The cake was slightly dry on top.", "", "", ""),
-    ("Belirsiz ama analiz edilir (düşük güven)",
+    ("Vague but analyzed (low confidence)",
      "It does not work", "The page does not work.", "Open the page",
      "It should work.", "It does not work properly.", "", "", ""),
-    ("Bilinmeyen Severity/Priority (LLM değeri kalır)",
+    ("Unknown Severity/Priority (the LLM's values are kept)",
      *VALID_BUGS[1], "Very Bad", "ASAP", "Checkout"),
-    ("Jira değerleri eşlenir (Major→HIGH, Low→P4)",
+    ("Jira values are mapped (Major → HIGH, Low → P4)",
      *VALID_BUGS[2], "Major", "Low", "Upload"),
 ]
 
@@ -218,7 +218,7 @@ def row_errors(batch):
     sheet = workbook.active
     sheet.title = "Bugs"
     # Notes above the header: the header may be anywhere in the first 20 rows.
-    sheet.append(["Hata senaryoları örnek dosyası - başlık satırı 3. satırda"])
+    sheet.append(["Error scenarios sample file - the header is in row 3"])
     sheet.append([])
     sheet.append(["Scenario (ignored)", *HEADERS, *OPTIONAL_HEADERS])
     for scenario in ROW_SCENARIOS:
@@ -226,14 +226,14 @@ def row_errors(batch):
 
     # A formula without a saved result (files written by scripts).
     sheet.append([
-        "Formül (kaydedilmiş sonuç yok)", "Header overlaps logo on tablets",
+        "Formula without a saved result", "Header overlaps logo on tablets",
         '=CONCATENATE("The header ","overlaps the logo")',
         "Open the home page on an iPad", "The logo is fully visible.",
         "The header covers half of the logo.", "", "", "",
     ])
     # A hidden row is skipped and counted above the results.
     sheet.append([
-        "Gizli satır (atlanır)", "Hidden row bug about date picker",
+        "Hidden row (skipped)", "Hidden row bug about date picker",
         "The date picker opens behind the dialog.", "Open the booking dialog\nClick the date field",
         "The date picker opens above the dialog.", "It opens behind the dialog.", "", "", "",
     ])
@@ -242,28 +242,28 @@ def row_errors(batch):
     sheet.column_dimensions["A"].width = 42
     for column in "BCDEF":
         sheet.column_dimensions[column].width = 40
-    save(workbook, batch, "20_satir_bazli_hatalar.xlsx")
+    save(workbook, batch, "20_row_level_errors.xlsx")
 
 
 def csv_semicolon_cp1254(batch):
-    lines = [";".join(["Senaryo", *HEADERS])]
+    lines = [";".join(["Scenario", *HEADERS])]
     rows = [
-        ["Geçerli (Türkçe karakterli)", "Ödeme sayfası açılmıyor",
+        ["Valid (Turkish characters)", "Ödeme sayfası açılmıyor",
          "Sepetten ödemeye geçince sayfa boş kalıyor.",
          "Sepete ürün ekle / Ödemeye geç", "Ödeme formu görünür.", "Sayfa beyaz ve boş kalıyor."],
-        ["Eksik değer", "Şifre sıfırlama e-postası gelmiyor", "", "Şifremi unuttum'a tıkla",
+        ["Missing value", "Şifre sıfırlama e-postası gelmiyor", "", "Şifremi unuttum'a tıkla",
          "E-posta gelir.", "E-posta gelmiyor."],
-        ["Placeholder", "deneme", "deneme deneme", "deneme", "test", "asd"],
+        ["Placeholder text", "deneme", "deneme deneme", "deneme", "test", "asd"],
     ]
     for row in rows:
         lines.append(";".join(row))
-    (batch / "21_noktali_virgul_cp1254.csv").write_bytes(
+    (batch / "21_semicolon_turkish_encoding.csv").write_bytes(
         "\r\n".join(lines).encode("cp1254")
     )
 
 
 def csv_missing_column(batch):
-    (batch / "22_csv_eksik_sutun.csv").write_text(
+    (batch / "22_csv_missing_column.csv").write_text(
         "Title,Description,Steps to Reproduce,Expected Result\n"
         "Login fails,Cannot log in with a valid password,Open login page,User logs in\n",
         encoding="utf-8",
@@ -291,15 +291,15 @@ def png(width=4, height=4, color=(220, 40, 40)):
 
 def screenshots(directory):
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / "gecerli.png").write_bytes(png(64, 64))
+    (directory / "valid.png").write_bytes(png(64, 64))
     for number in range(1, 7):
-        (directory / f"alti_adet_{number}.png").write_bytes(png(8, 8))
+        (directory / f"six_screenshots_{number}.png").write_bytes(png(8, 8))
     # Starts like a PNG but is cut off: passes the upload check, Ollama fails.
-    (directory / "hasarli_yarim.png").write_bytes(png(64, 64)[:40])
+    (directory / "truncated.png").write_bytes(png(64, 64)[:40])
     # A text file renamed to .png: rejected by its first bytes.
-    (directory / "aslinda_metin.png").write_text("This is not an image.\n")
+    (directory / "not_an_image.png").write_text("This is not an image.\n")
     # A PNG padded past 10 MB.
-    (directory / "10mb_ustu.png").write_bytes(png(8, 8) + b"\x00" * (10 * 1024 * 1024 + 1))
+    (directory / "larger_than_10mb.png").write_bytes(png(8, 8) + b"\x00" * (10 * 1024 * 1024 + 1))
 
 
 BATCH_BUILDERS = (

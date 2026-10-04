@@ -1,0 +1,4 @@
+Scenario;Title;Description;Steps to Reproduce;Expected Result;Actual Result
+Valid (Turkish characters);Ödeme sayfasý açýlmýyor;Sepetten ödemeye geçince sayfa boþ kalýyor.;Sepete ürün ekle / Ödemeye geç;Ödeme formu görünür.;Sayfa beyaz ve boþ kalýyor.
+Missing value;Þifre sýfýrlama e-postasý gelmiyor;;Þifremi unuttum'a týkla;E-posta gelir.;E-posta gelmiyor.
+Placeholder text;deneme;deneme deneme;deneme;test;asd
