@@ -2196,38 +2196,6 @@
             }
         }
 
-        async function checkAnalysisHealth() {
-            try {
-                const response = await fetch("/health/analysis", {
-                    method: "GET",
-                    cache: "no-store"
-                });
-
-                let data;
-
-                try {
-                    data = await response.json();
-                } catch {
-                    data = null;
-                }
-
-                if (!response.ok || !data) {
-                    return {
-                        available: false,
-                        reason: `Health check failed (HTTP ${response.status}).`
-                    };
-                }
-
-                return data;
-
-            } catch (error) {
-                return {
-                    available: false,
-                    reason: "Could not connect to the analysis service."
-                };
-            }
-        }
-
         // Diagnosis messages are built as HTML, but their reasons can contain
         // text from Ollama or the model, so they must never be rendered as HTML.
         function escapeHtml(value) {
@@ -4139,15 +4107,9 @@
                     return;
                 }
 
-                const data = await checkAnalysisHealth();
-
-                if (!data.available) {
-                    scheduleServiceRecheck();
-                } else if (!diagnosisModal.hidden) {
-                    await runDiagnosis();
-                } else {
-                    setServiceStatus("available");
-                }
+                // Updates the status (and schedules the next check) and the
+                // diagnosis window.
+                await runDiagnosis();
             } finally {
                 serviceRecheckRunning = false;
             }
@@ -4198,15 +4160,8 @@
         async function checkServiceStatus() {
             setServiceStatus("checking");
 
-            const data = await checkAnalysisHealth();
-
-            if (data.available) {
-                setServiceStatus("available");
-                return;
-            }
-
-            // Prepare the diagnosis window so the reason is ready when the
-            // user opens it.
+            // The diagnosis also fills the diagnosis window, so the reason is
+            // ready when the user opens it.
             await runDiagnosis();
         }
 
