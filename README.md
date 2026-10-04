@@ -75,7 +75,7 @@ The page shows whether the analysis service is available and keeps it up to date
 | Priority | – | Priority, Bug Priority, Issue Priority |
 | Category | – | Category, Bug Category, Type, Bug Type |
 
-When the optional Severity, Priority or Category columns are filled, their values replace the ones suggested by the LLM. Numbers, percentages and dates are read as displayed in Excel (`404`, `15%`, `2026-10-02`).
+When the optional Severity or Priority columns are filled, their values replace the ones suggested by the LLM. Common values from tools such as Jira, Bugzilla, Azure DevOps and ServiceNow are mapped to the app's scale (for example `Blocker` → CRITICAL, `Major` → HIGH, `Highest` → P1, `Sev 2` → HIGH, Turkish `Yüksek` → HIGH); unknown values are ignored and the LLM's value is kept. A filled Category column replaces the LLM's category. Numbers, percentages and dates are read as displayed in Excel (`404`, `15%`, `2026-10-02`).
 
 ---
 
