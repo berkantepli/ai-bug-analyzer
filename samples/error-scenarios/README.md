@@ -53,7 +53,7 @@ Upload these in the **Batch Analysis** tab. No bug is analyzed; an error message
 
 ### Two columns with the same header
 
-`batch/16_duplicate_title_columns.xlsx` has two Title columns. Only the first one is read:
+`batch/16_duplicate_title_columns.xlsx` has two Title columns. Only the first one is read, and a **Duplicate columns** note above the results says so: *Columns A ("Title") and F ("Title") both look like the title column; only column A is read.*
 
 | Row | Scenario | Result |
 |---|---|---|

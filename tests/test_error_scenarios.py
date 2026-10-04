@@ -225,6 +225,10 @@ def test_only_the_first_of_two_title_columns_is_read(sample_files) -> None:
     response = post_batch(batch / "16_duplicate_title_columns.xlsx")
 
     assert response.status_code == 200
+    assert response.json()["duplicate_columns"] == [
+        'Columns A ("Title") and F ("Title") both look like the title column; '
+        "only column A is read."
+    ]
     assert [
         (bug["row"], bug["status"], bug["title"], bug["error"])
         for bug in response.json()["bugs"]

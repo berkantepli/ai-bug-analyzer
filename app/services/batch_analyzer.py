@@ -7,6 +7,7 @@ from typing import Iterable, Iterator, Optional
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 import xlrd
 
 from app.services.llm_analyzer import (
@@ -275,6 +276,40 @@ def _header_indexes(row: tuple[object, ...]) -> dict[str, int]:
     return indexes
 
 
+def _duplicate_column_warnings(
+    header: tuple[object, ...], indexes: dict[str, int]
+) -> list[str]:
+    """Explain columns that also match a field but are not read.
+
+    Only the first matching column is used, so a value that is only in a
+    later column, for example a second "Title", would otherwise be reported
+    as missing without any hint why.
+    """
+    headers = [_normalize_header(value) for value in header]
+
+    def column(index: int) -> str:
+        return f'{get_column_letter(index + 1)} ("{_cell_text(header[index])}")'
+
+    warnings = []
+    for field, used in indexes.items():
+        ignored = [
+            index
+            for index, name in enumerate(headers)
+            if index != used and name in FIELD_ALIASES[field]
+        ]
+        if not ignored:
+            continue
+        columns = [column(index) for index in (used, *ignored)]
+        listed = ", ".join(columns[:-1]) + " and " + columns[-1]
+        quantity = "both" if len(columns) == 2 else "all"
+        warnings.append(
+            f"Columns {listed} {quantity} look like the "
+            f"{field.replace('_', ' ')} column; only column "
+            f"{get_column_letter(used + 1)} is read."
+        )
+    return warnings
+
+
 def _find_header(rows: list[tuple[object, ...]]) -> tuple[int, dict[str, int]]:
     """Find the header row, allowing report titles or notes above it."""
     best_row_index = 0
@@ -393,14 +428,15 @@ async def _records_from_rows(
     explanation instead of "missing values". Hidden rows (also rows hidden
     by a filter) are skipped, as the user does not see them.
 
-    The second value holds details for the response: detected_columns and
-    skipped_hidden_rows. file_type ("Excel" or "CSV") is used in messages.
+    The second value holds details for the response: detected_columns,
+    duplicate_columns and skipped_hidden_rows. file_type ("Excel" or "CSV") is used in messages.
     """
     if not rows:
         raise HTTPException(status_code=422, detail=f"The {file_type} file is empty.")
 
     header_index, indexes = _find_header(rows)
     detected_columns = None
+    duplicate_columns = _duplicate_column_warnings(rows[header_index], indexes)
 
     missing = [field for field in REQUIRED_FIELDS if field not in indexes]
     if missing:
@@ -495,6 +531,7 @@ async def _records_from_rows(
     _mark_duplicates(records)
     return records, {
         "detected_columns": detected_columns,
+        "duplicate_columns": duplicate_columns,
         "skipped_hidden_rows": skipped_hidden_rows,
     }
 
