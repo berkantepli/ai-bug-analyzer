@@ -44,7 +44,7 @@ Short or vague reports about real software behavior (for example "It does not wo
 
 ### Batch analysis (Excel and CSV)
 
-Upload an `.xlsx`, `.xls` or `.csv` file to analyze many bugs at once.
+Upload an `.xlsx`, `.xls` or `.csv` file (choose it or drag it onto the upload box) to analyze many bugs at once.
 
 - **Never stops on a bad row.** Rows with missing values, unusable text or LLM errors are shown as **FAILED** with the reason, and the remaining bugs are still analyzed.
 - **Duplicates are detected.** A bug identical to an earlier one (ignoring case, spacing and punctuation) is marked **DUPLICATE OF BUG N** and is not sent to the LLM again.
