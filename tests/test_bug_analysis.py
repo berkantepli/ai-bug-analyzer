@@ -5,6 +5,8 @@ from app.main import app
 from app.services.llm_analyzer import (
     ContextTooLargeError,
     InvalidBugReportError,
+    LLMOutputError,
+    OllamaUnavailableError,
     UnreadableScreenshotError,
 )
 from helpers import FAKE_ANALYSIS
@@ -137,7 +139,7 @@ def test_bug_analysis_explains_context_overflow(monkeypatch) -> None:
 
 def test_bug_analysis_explains_llm_errors(monkeypatch) -> None:
     async def fake_analyze_with_llm(bug, screenshots=None):
-        raise RuntimeError("Could not connect to Ollama.")
+        raise OllamaUnavailableError("Could not connect to Ollama.")
 
     monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
 
@@ -208,3 +210,19 @@ def test_damaged_screenshot_is_a_user_error(monkeypatch) -> None:
 
     assert response.status_code == 422
     assert response.json() == {"detail": "A screenshot could not be read."}
+
+
+def test_unusable_llm_answer_is_not_reported_as_unavailable(monkeypatch) -> None:
+    # 503 makes the page check the service status; Ollama works here.
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        raise LLMOutputError("The LLM returned an incomplete analysis.")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    response = client.post("/bugs/analyze", data=VALID_BUG)
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "detail": "The LLM could not analyze this bug: "
+        "The LLM returned an incomplete analysis. Try again."
+    }

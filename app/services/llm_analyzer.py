@@ -69,6 +69,10 @@ class ContextTooLargeError(RuntimeError):
     """The report and screenshots do not fit into the model's context window."""
 
 
+class LLMOutputError(RuntimeError):
+    """The model answered, but the answer is not usable JSON."""
+
+
 class UnreadableScreenshotError(RuntimeError):
     """The model could not decode a screenshot, for example a damaged file."""
 
@@ -461,7 +465,7 @@ async def _request_json(prompt: str, images: list[str], schema: type) -> dict:
         content = response["message"]["content"]
 
     except (KeyError, TypeError) as error:
-        raise RuntimeError(
+        raise LLMOutputError(
             "Ollama response did not contain the expected message content."
         ) from error
 
@@ -469,7 +473,7 @@ async def _request_json(prompt: str, images: list[str], schema: type) -> dict:
         return json.loads(content)
 
     except json.JSONDecodeError as error:
-        raise RuntimeError("The LLM returned invalid JSON.") from error
+        raise LLMOutputError("The LLM returned invalid JSON.") from error
 
 
 def _validate(schema: type, data: dict):
@@ -478,7 +482,23 @@ def _validate(schema: type, data: dict):
 
     except Exception as error:
         logger.warning("LLM response failed %s validation: %s", schema.__name__, error)
-        raise RuntimeError("The LLM returned an incomplete analysis.") from error
+        raise LLMOutputError("The LLM returned an incomplete analysis.") from error
+
+
+# An unusable answer is usually a one-off, so the request is sent once more
+# before the bug is reported as failed.
+LLM_OUTPUT_ATTEMPTS = 2
+
+
+async def _ask(prompt: str, images: list[str], schema: type):
+    """Send the prompt and return the answer validated against the schema."""
+    for attempt in range(1, LLM_OUTPUT_ATTEMPTS + 1):
+        try:
+            return _validate(schema, await _request_json(prompt, images, schema))
+        except LLMOutputError:
+            if attempt == LLM_OUTPUT_ATTEMPTS:
+                raise
+            logger.warning("Unusable %s answer; asking the LLM again", schema.__name__)
 
 
 def _raise_if_invalid(validity: ReportValidity) -> None:
@@ -554,8 +574,7 @@ async def match_spreadsheet_columns(
 ) -> dict[str, Optional[int]]:
     """Ask the LLM which column holds which field when headers are unknown."""
     prompt = build_column_matching_prompt(headers, samples)
-    data = await _request_json(prompt, [], SpreadsheetColumns)
-    return _validate(SpreadsheetColumns, data).model_dump()
+    return (await _ask(prompt, [], SpreadsheetColumns)).model_dump()
 
 
 # Number of analyses currently waiting on Ollama. The health check uses it
@@ -595,10 +614,7 @@ async def _analyze_with_llm(bug: BugReportCreate, screenshots: list) -> BugAnaly
     # page must not reject a valid report, and the detected language is
     # named explicitly in the analysis prompt, which the model follows far
     # more reliably than "answer in the report's language".
-    validity = _validate(
-        ReportValidity,
-        await _request_json(build_validity_prompt(bug), [], ReportValidity),
-    )
+    validity = await _ask(build_validity_prompt(bug), [], ReportValidity)
     _raise_if_invalid(validity)
 
     prompt = build_prompt(
@@ -606,12 +622,9 @@ async def _analyze_with_llm(bug: BugReportCreate, screenshots: list) -> BugAnaly
     )
 
     if not images:
-        return _validate(BugAnalysis, await _request_json(prompt, [], BugAnalysis))
+        return await _ask(prompt, [], BugAnalysis)
 
-    result = _validate(
-        ScreenshotBugAnalysis,
-        await _request_json(prompt, images, ScreenshotBugAnalysis),
-    )
+    result = await _ask(prompt, images, ScreenshotBugAnalysis)
 
     analysis = result.model_dump(exclude={"screenshot_matches_report"})
     if not result.screenshot_matches_report:

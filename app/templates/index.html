@@ -2825,11 +2825,19 @@
         // Sends only the bugs that were not analyzed because Ollama stopped,
         // using the values from the last result, and merges the new results
         // into it by Excel row.
+        // Bugs worth sending again: not analyzed because Ollama stopped, or
+        // failed because of the LLM (an unusable answer). Rows rejected while
+        // reading the file or judged not to be bug reports fail again.
+        function isRetryableBug(bug) {
+            return (
+                bug.status === "not_analyzed" ||
+                (bug.status === "failed" && (bug.error || "").startsWith(LLM_ERROR_PREFIX))
+            );
+        }
+
         async function retryNotAnalyzedBugs() {
             const data = currentBatchData;
-            const bugsToRetry = data
-                ? data.bugs.filter(bug => bug.status === "not_analyzed")
-                : [];
+            const bugsToRetry = data ? data.bugs.filter(isRetryableBug) : [];
 
             if (!bugsToRetry.length) {
                 return;
@@ -2902,7 +2910,7 @@
 
                 const button = document.getElementById("batchRetryButton");
                 if (button) {
-                    button.textContent = "Retry not analyzed bugs";
+                    button.textContent = button.dataset.label;
                 }
                 refreshAnalyzeButtons();
             }
@@ -3570,29 +3578,48 @@
 
             resultHeading.textContent = `Batch Analysis Result`;
 
-            if (data.stopped_reason) {
+            const llmFailedCount = data.bugs.filter(
+                bug => bug.status === "failed" && isRetryableBug(bug)
+            ).length;
+
+            // Shown when Ollama stopped the batch, or when bugs failed only
+            // because of an unusable LLM answer and can be sent again.
+            if (data.stopped_reason || llmFailedCount) {
                 const notice = document.createElement("div");
                 notice.className = "result-item batch-stopped-notice";
                 notice.setAttribute("role", "alert");
 
                 const noticeLabel = document.createElement("div");
                 noticeLabel.className = "result-label";
-                noticeLabel.textContent = "Batch stopped";
+                noticeLabel.textContent = data.stopped_reason
+                    ? "Batch stopped"
+                    : "Some bugs could not be analyzed";
 
                 const noticeText = document.createElement("div");
                 noticeText.className = "result-value";
-                noticeText.textContent = data.retry_error
-                    ? `Retry failed: ${data.retry_error}`
-                    : `${data.stopped_reason} The remaining bugs were not analyzed.`;
+                if (data.retry_error) {
+                    noticeText.textContent = `Retry failed: ${data.retry_error}`;
+                } else if (data.stopped_reason) {
+                    noticeText.textContent =
+                        `${data.stopped_reason} The remaining bugs were not analyzed.`;
+                } else {
+                    noticeText.textContent =
+                        `${llmFailedCount} ${llmFailedCount === 1 ? "bug" : "bugs"} failed because the LLM returned an unusable answer. ${llmFailedCount === 1 ? "It" : "They"} can be analyzed again.`;
+                }
 
                 notice.append(noticeLabel, noticeText);
 
-                if (data.bugs.some(bug => bug.status === "not_analyzed")) {
+                if (data.bugs.some(isRetryableBug)) {
                     const retryButton = document.createElement("button");
                     retryButton.id = "batchRetryButton";
                     retryButton.type = "button";
                     retryButton.className = "batch-retry-button";
-                    retryButton.textContent = "Retry not analyzed bugs";
+                    retryButton.dataset.label = !data.stopped_reason
+                        ? "Retry failed bugs"
+                        : llmFailedCount
+                            ? "Retry not analyzed and failed bugs"
+                            : "Retry not analyzed bugs";
+                    retryButton.textContent = retryButton.dataset.label;
                     retryButton.addEventListener("click", retryNotAnalyzedBugs);
                     notice.appendChild(retryButton);
                 }

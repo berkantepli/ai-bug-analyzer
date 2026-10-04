@@ -302,3 +302,16 @@ def test_damaged_screenshot_is_reported_as_unreadable(monkeypatch) -> None:
         llm_analyzer._call_ollama({})
 
     assert str(error.value).startswith("A screenshot could not be read")
+
+
+def test_unusable_answer_is_requested_once_more(monkeypatch) -> None:
+    answers = [
+        {"message": {"content": "not json"}},
+        {"message": {"content": json.dumps({"screenshot_matches_report": True})}},
+    ]
+    monkeypatch.setattr(llm_analyzer, "_call_ollama", lambda payload: answers.pop(0))
+
+    result = asyncio.run(llm_analyzer._ask("prompt", [], SCHEMA))
+
+    assert result.screenshot_matches_report is True
+    assert answers == []

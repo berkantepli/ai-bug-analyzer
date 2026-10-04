@@ -317,11 +317,17 @@ async def analyze_bug(
         raise HTTPException(status_code=422, detail=str(error)) from error
     except ContextTooLargeError as error:
         raise HTTPException(status_code=413, detail=str(error)) from error
-    # Ollama unreachable, timeouts or an unusable LLM answer; the message is
-    # already written for users, the details are in the server log.
-    except RuntimeError as error:
+    # Ollama unreachable or timed out: the page checks the service status.
+    except OllamaUnavailableError as error:
         raise HTTPException(
             status_code=503, detail=f"The LLM could not analyze this bug: {error}"
+        ) from error
+    # An unusable LLM answer, even after asking again; Ollama itself works.
+    # The message is written for users, the details are in the server log.
+    except RuntimeError as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"The LLM could not analyze this bug: {error} Try again.",
         ) from error
     finally:
         watcher.cancel()
