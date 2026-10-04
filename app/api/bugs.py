@@ -2,12 +2,13 @@ from typing import Awaitable, Callable, Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.analysis import BugAnalysis
 from app.schemas.bug import BugReportCreate
 
 from app.services.llm_analyzer import (
+    SPREADSHEET_FIELDS,
     ContextTooLargeError,
     InvalidBugReportError,
     OllamaUnavailableError,
@@ -19,8 +20,10 @@ from app.services.batch_analyzer import (
     parse_bug_spreadsheet,
 )
 from app.services.excel_values import map_priority, map_severity
+from app.services.readability import MAX_FIELD_CHARS
 
 import asyncio
+import re
 
 
 router = APIRouter(prefix="/bugs", tags=["bugs"])
@@ -95,6 +98,9 @@ NOT_ANALYZED_ERROR = (
     "The LLM could not analyze this bug: Ollama became unavailable during "
     "this batch, so this bug was not analyzed."
 )
+
+
+BATCH_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,100}")
 
 
 # Progress of running batches, keyed by the batch id sent by each client,
@@ -286,6 +292,11 @@ async def _run_batch(
     columns, the header used for each field.
     """
     batch_id = batch_id or uuid4().hex
+    if not BATCH_ID_PATTERN.fullmatch(batch_id):
+        raise HTTPException(
+            status_code=422,
+            detail="batch_id must be 1-100 letters, digits, '-' or '_'.",
+        )
     if batch_id in batch_progress:
         raise HTTPException(status_code=409, detail="Batch is already running.")
 
@@ -368,6 +379,16 @@ async def analyze_bug_batch(
 class RetryBug(BaseModel):
     row: int
     bug: dict[str, str]
+
+    @field_validator("bug")
+    @classmethod
+    def only_known_fields(cls, values: dict[str, str]) -> dict[str, str]:
+        unknown = set(values) - set(SPREADSHEET_FIELDS)
+        if unknown:
+            raise ValueError(f"unknown fields: {', '.join(sorted(unknown))}")
+        if any(len(value) > MAX_FIELD_CHARS for value in values.values()):
+            raise ValueError(f"values must be at most {MAX_FIELD_CHARS} characters")
+        return values
 
 
 class RetryRequest(BaseModel):

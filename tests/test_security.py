@@ -202,3 +202,30 @@ def test_validation_details_are_not_returned_to_the_user(monkeypatch) -> None:
         asyncio.run(llm_analyzer.analyze_with_llm(bug))
 
     assert str(error.value) == "The LLM returned an incomplete analysis."
+
+
+# ---------------- batch ids and retry requests ----------------
+
+
+@pytest.mark.parametrize("batch_id", ["x" * 101, "has space", "../etc"])
+def test_invalid_batch_ids_are_rejected(batch_id) -> None:
+    response = client.post(
+        "/bugs/batch/retry",
+        json={"batch_id": batch_id, "bugs": [{"row": 2, "bug": {"title": "x"}}]},
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "bug",
+    [
+        {"title": "Login fails", "script": "<b>not a field</b>"},
+        {"title": "Login fails", "description": "x" * 5001},
+    ],
+    ids=["unknown field", "value too long"],
+)
+def test_retry_accepts_only_known_fields_of_limited_length(bug) -> None:
+    response = client.post("/bugs/batch/retry", json={"bugs": [{"row": 2, "bug": bug}]})
+
+    assert response.status_code == 422
