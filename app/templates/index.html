@@ -1562,6 +1562,11 @@
             color: var(--text);
         }
 
+        /* Room for the close button in the top right corner */
+        #diagnosisModal .diagnosis-modal-header h3 {
+            padding-right: 40px;
+        }
+
 
         /* Close Button */
 
@@ -1983,6 +1988,98 @@
             line-height: 1;
             color: var(--text-primary);
         }
+        /* Small screens; after all other rules so it overrides them. */
+        @media (max-width: 680px) {
+            /* Text below 16px makes iOS zoom into the field on focus. */
+            input,
+            textarea {
+                font-size: 16px;
+            }
+
+            /* Larger touch targets for small controls */
+            .clear-button {
+                padding: 10px 16px;
+            }
+
+            .diagnosis-icon-button {
+                padding: 8px 10px;
+            }
+
+            .theme-switch {
+                width: 52px;
+                height: 30px;
+            }
+
+            /* Thumbnails go below the button instead of being squeezed
+               next to it into one column. */
+            .screenshot-upload {
+                flex-wrap: wrap;
+            }
+
+            .screenshot-file-name {
+                flex-basis: 100%;
+                white-space: normal;
+            }
+
+            .screenshot-list {
+                margin-top: 0;
+            }
+
+            .screenshot-item {
+                width: calc((100% - 20px) / 3);
+            }
+
+            .screenshot-remove {
+                width: 28px;
+                height: 28px;
+                line-height: 28px;
+            }
+
+            /* Two counts per row instead of one tall column */
+            .batch-summary {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .batch-bug-header {
+                flex-wrap: wrap;
+                padding: 16px;
+            }
+
+            /* The status badge moves below a long title instead of
+               squeezing it into a narrow column. */
+            .batch-bug-title {
+                flex: 1 1 120px;
+            }
+
+            .batch-bug-content {
+                grid-template-columns: 1fr;
+                padding: 0 16px 16px;
+            }
+
+            /* A 260px tooltip centered on an icon near the screen edge is
+               cut off; here it spans the width of the label row instead. */
+            .info-tooltip,
+            .confidence-badge {
+                position: static;
+            }
+
+            .result-label,
+            .visual-evidence-label,
+            .suggested-scenarios-header-left,
+            #resultHeading {
+                position: relative;
+            }
+
+            .info-tooltip::after,
+            .confidence-badge::after,
+            .info-tooltip:hover::after,
+            .confidence-badge:hover::after {
+                left: 0;
+                right: 0;
+                width: auto;
+                transform: none;
+            }
+        }
     </style>
 </head>
 
@@ -2050,7 +2147,7 @@
                     <label for="bugTitle">Bug Title</label>
 
                     <input id="bugTitle" name="bugTitle" type="text"
-                        placeholder="Summarize the problem in one short sentence" autocomplete="off">
+                        placeholder="Summarize the problem in one sentence" autocomplete="off">
 
                     <div id="bugTitleError" class="validation-message">
                         <span class="validation-icon">!</span>
