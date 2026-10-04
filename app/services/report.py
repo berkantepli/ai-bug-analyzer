@@ -6,6 +6,7 @@ from io import BytesIO
 from typing import Iterable, Optional
 
 from openpyxl import Workbook
+from openpyxl.comments import Comment
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -172,9 +173,11 @@ def batch_report(
     _batch_summary(summary, bugs, source_name, exported_at)
 
     sheet = workbook.create_sheet("Bugs")
+    is_csv = (source_name or "").lower().endswith(".csv")
+    row_title = "File Row" if is_csv else "Excel Row"
     columns = [
         ("Bug", 7),
-        ("Row", 7),
+        (row_title, 11),
         ("Status", 13),
         ("Title", 36),
         ("Description", 45),
@@ -218,6 +221,16 @@ def batch_report(
         )
     _table(sheet, columns, rows)
     _confidence(sheet, column=12)
+    sheet["A1"].comment = Comment(
+        "The bug's number on the page (Bug 1, Bug 2...), also used in "
+        "Duplicate Of.",
+        "AI Bug Analyzer",
+    )
+    sheet["B1"].comment = Comment(
+        f"The row of the bug in the uploaded {'CSV' if is_csv else 'Excel'} "
+        "file. Empty and hidden rows are skipped, so the numbers can have gaps.",
+        "AI Bug Analyzer",
+    )
 
     scenarios = workbook.create_sheet("Test Scenarios")
     _table(

@@ -90,6 +90,8 @@ def test_batch_report_lists_every_bug_with_its_status() -> None:
     assert (summary["Bugs"], summary["Analyzed"], summary["Failed"]) == (4, 1, 1)
     assert (summary["Duplicate"], summary["Not analyzed"]) == (1, 1)
     rows = list(book["Bugs"].iter_rows(values_only=True))
+    assert rows[0][:2] == ("Bug", "Excel Row")
+    assert "uploaded Excel file" in book["Bugs"]["B1"].comment.text
     assert [row[2] for row in rows[1:]] == [
         "Analyzed",
         "Duplicate",
@@ -124,3 +126,13 @@ def test_report_requests_are_validated() -> None:
 
     assert client.post("/bugs/export/batch", json=unknown_status).status_code == 422
     assert client.post("/bugs/export/single", json=unknown_field).status_code == 422
+
+
+def test_csv_batch_report_names_the_file_row() -> None:
+    bugs = [{"row": 2, "status": "analyzed", "bug": BUG, "analysis": ANALYSIS}]
+
+    response = client.post(
+        "/bugs/export/batch", json={"source_name": "bugs.csv", "bugs": bugs}
+    )
+
+    assert workbook(response)["Bugs"]["B1"].value == "File Row"
