@@ -2050,7 +2050,7 @@
                     <label for="bugTitle">Bug Title</label>
 
                     <input id="bugTitle" name="bugTitle" type="text"
-                        placeholder="e.g. App crashes when uploading a large image" autocomplete="off">
+                        placeholder="Summarize the problem in one short sentence" autocomplete="off">
 
                     <div id="bugTitleError" class="validation-message">
                         <span class="validation-icon">!</span>
@@ -2062,7 +2062,7 @@
                     <label for="description">Description</label>
 
                     <textarea id="description" name="description"
-                        placeholder="Describe the bug and provide any relevant context..."></textarea>
+                        placeholder="Explain the problem and where it happens, such as the page, device, browser or app version"></textarea>
 
                     <div id="descriptionError" class="validation-message">
                         <span class="validation-icon">!</span>
@@ -2074,7 +2074,7 @@
                     <label for="stepsToReproduce">Steps to Reproduce</label>
 
                     <textarea id="stepsToReproduce" name="stepsToReproduce"
-                        placeholder="1. Open the application&#10;2. Navigate to the upload screen&#10;3. Select an image larger than 10 MB&#10;4. Tap Upload"></textarea>
+                        placeholder="List the actions that lead to the bug, one per line (numbering is optional)"></textarea>
 
                     <div id="stepsToReproduceError" class="validation-message">
                         <span class="validation-icon">!</span>
@@ -2085,7 +2085,7 @@
                 <div class="field">
                     <label for="expectedResult">Expected Result</label>
 
-                    <textarea id="expectedResult" name="expectedResult" placeholder="What should happen?"></textarea>
+                    <textarea id="expectedResult" name="expectedResult" placeholder="Describe what should happen after the last step"></textarea>
 
                     <div id="expectedResultError" class="validation-message">
                         <span class="validation-icon">!</span>
@@ -2096,7 +2096,7 @@
                 <div class="field">
                     <label for="actualResult">Actual Result</label>
 
-                    <textarea id="actualResult" name="actualResult" placeholder="What actually happens?"></textarea>
+                    <textarea id="actualResult" name="actualResult" placeholder="Describe what happens instead, including any error message"></textarea>
 
                     <div id="actualResultError" class="validation-message">
                         <span class="validation-icon">!</span>
