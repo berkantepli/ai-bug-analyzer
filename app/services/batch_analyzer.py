@@ -234,9 +234,22 @@ def _read_rows(
     return result
 
 
+class ExcelErrorValue(str):
+    """A cell showing an Excel error such as #N/A or #REF!, usually from a
+    broken formula; it is not text written by the reporter."""
+
+
+def _xlsx_cell_value(cell) -> object:
+    if cell.data_type == "e":
+        return ExcelErrorValue(cell.value)
+    return _format_cell(cell.value, cell.number_format or "General")
+
+
 def _xls_cell_value(workbook: xlrd.book.Book, cell: xlrd.sheet.Cell) -> object:
-    if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK, xlrd.XL_CELL_ERROR):
+    if cell.ctype in (xlrd.XL_CELL_EMPTY, xlrd.XL_CELL_BLANK):
         return None
+    if cell.ctype == xlrd.XL_CELL_ERROR:
+        return ExcelErrorValue(xlrd.error_text_from_code.get(cell.value, "#ERROR"))
     if cell.ctype == xlrd.XL_CELL_BOOLEAN:
         return bool(cell.value)
     if cell.ctype == xlrd.XL_CELL_DATE:
@@ -345,6 +358,16 @@ def build_record(row_number: int, values: dict[str, str]) -> dict:
     return {"row": row_number, "values": values, "error": error, "duplicate_of": None}
 
 
+def _error_value_message(errors: dict[str, str]) -> str:
+    labels = ", ".join(
+        f"{field.replace('_', ' ')} ({value})" for field, value in errors.items()
+    )
+    return (
+        f"Excel error value in: {labels}. Fix the formula or value in Excel "
+        "and save the file again."
+    )
+
+
 def _unsaved_formula_error(fields: list[str]) -> str:
     labels = ", ".join(field.replace("_", " ") for field in fields)
     return (
@@ -413,22 +436,35 @@ async def _records_from_rows(
                 skipped_hidden_rows += 1
             continue
 
-        values = {
-            field: str(row[index]).strip()
-            if index < len(row) and row[index] is not None
-            else ""
+        cells = {
+            field: row[index] if index < len(row) else None
             for field, index in indexes.items()
+        }
+        error_values = {
+            field: str(cells[field])
+            for field in REQUIRED_FIELDS
+            if isinstance(cells[field], ExcelErrorValue)
+        }
+        # Error values are not report text; optional fields then stay empty
+        # and the LLM's value is kept.
+        values = {
+            field: ""
+            if value is None or isinstance(value, ExcelErrorValue)
+            else str(value).strip()
+            for field, value in cells.items()
         }
         formula_fields = [
             field
             for field in REQUIRED_FIELDS
             if (row_number, indexes[field]) in unsaved_formulas
         ]
-        if not any(values.values()) and not formula_fields:
+        if not any(values.values()) and not formula_fields and not error_values:
             continue
 
         record = build_record(row_number, values)
-        if formula_fields:
+        if error_values:
+            record["error"] = _error_value_message(error_values)
+        elif formula_fields:
             record["error"] = _unsaved_formula_error(formula_fields)
         records.append(record)
 
@@ -501,10 +537,7 @@ async def parse_bug_spreadsheet(file: UploadFile) -> tuple[list[dict], dict]:
             try:
                 rows = _read_rows(
                     (
-                        tuple(
-                            _format_cell(cell.value, cell.number_format or "General")
-                            for cell in row
-                        )
+                        tuple(_xlsx_cell_value(cell) for cell in row)
                         for row in workbook.active.iter_rows(min_row=1)
                     ),
                     file_type,

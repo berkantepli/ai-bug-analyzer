@@ -151,3 +151,25 @@ def test_csv_exports_from_excel_are_read(content) -> None:
 
     assert response.status_code == 200
     assert response.json()["bugs"][0]["bug"]["title"] == "Login fails"
+
+
+def test_excel_error_values_are_explained_not_analyzed(fake_llm) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    for row in (HEADER + ("Category",), LOGIN + ("#N/A",), LOGOUT + ("Auth",)):
+        sheet.append(row)
+    # Values Excel saves for formulas that failed, for example a VLOOKUP.
+    for cell in ("B2", "F2"):
+        sheet[cell].data_type = "e"
+    sheet["B2"].value = "#N/A"
+    output = BytesIO()
+    workbook.save(output)
+
+    bugs = post("bugs.xlsx", output.getvalue()).json()["bugs"]
+
+    assert fake_llm == ["Logout fails"]
+    assert bugs[0]["status"] == "failed"
+    assert bugs[0]["error"] == (
+        "Excel error value in: description (#N/A). Fix the formula or value "
+        "in Excel and save the file again."
+    )
