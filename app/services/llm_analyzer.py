@@ -3,7 +3,7 @@ import base64
 import json
 import logging
 import socket
-from typing import Optional
+from typing import Literal, Optional, get_args
 import weakref
 
 from urllib.request import Request, urlopen
@@ -47,13 +47,48 @@ class ReportValidity(BaseModel):
     invalid_reason: str
 
 
+# The model picks the category from this list, so it stays in English for
+# reports in any language and results can be grouped. A free-text category
+# came back in the report's language now and then (for example Turkish).
+BugCategory = Literal[
+    "Authentication",
+    "Authorization",
+    "User Interface",
+    "Forms and Input",
+    "Navigation",
+    "Search",
+    "Checkout and Payment",
+    "File Upload and Download",
+    "Notifications and Email",
+    "Data and Storage",
+    "API and Integration",
+    "Reporting and Export",
+    "Performance",
+    "Stability and Crashes",
+    "Security",
+    "Accessibility",
+    "Localization",
+    "Compatibility",
+    "Settings and Configuration",
+    "Other",
+]
+
+BUG_CATEGORIES = get_args(BugCategory)
+
+
+class LLMBugAnalysis(BugAnalysis):
+    """What the model must answer; the category comes from a fixed list."""
+
+    category: BugCategory
+
+
 class ScreenshotMatch(BaseModel):
     screenshot_matches_report: bool
 
 
 # Comes first so the model compares the screenshot with the report before
 # writing the analysis.
-class ScreenshotBugAnalysis(BugAnalysis, ScreenshotMatch):
+class ScreenshotBugAnalysis(LLMBugAnalysis, ScreenshotMatch):
     pass
 
 
@@ -248,7 +283,9 @@ Rules:
    P3
    P4
 
-3. category should describe the functional area of the bug.
+3. category is the functional area of the bug and must be exactly one of:
+{chr(10).join(f"   {category}" for category in BUG_CATEGORIES)}
+   Use Other only when no other value fits.
 
 4. impact must describe the concrete effect of the bug on the
    user, system, business flow, or affected functionality.
@@ -627,7 +664,8 @@ async def _analyze_with_llm(bug: BugReportCreate, screenshots: list) -> BugAnaly
     )
 
     if not images:
-        return await _ask(prompt, [], BugAnalysis)
+        result = await _ask(prompt, [], LLMBugAnalysis)
+        return BugAnalysis.model_validate(result.model_dump())
 
     result = await _ask(prompt, images, ScreenshotBugAnalysis)
 

@@ -40,12 +40,19 @@ def test_empty_or_invalid_llm_response_raises(monkeypatch, response) -> None:
 ANALYSIS_FIELDS = {
     "severity": "LOW",
     "priority": "P4",
-    "category": "General",
+    "category": "Other",
     "impact": "None",
     "possible_root_cause": "None",
     "suggested_test_scenarios": [],
     "missing_information": [],
     "confidence": 0.1,
+}
+
+
+VALID_REPORT = {
+    "report_language": "English",
+    "is_valid_bug_report": True,
+    "invalid_reason": "",
 }
 
 
@@ -321,3 +328,34 @@ def test_steps_are_numbered_for_the_model() -> None:
     prompt = llm_analyzer.build_validity_prompt(BUG)
 
     assert "1. Open login\n2. Submit" in prompt
+
+
+def test_a_category_outside_the_list_is_asked_again(monkeypatch) -> None:
+    # A category in the report's language (or any other free text) does not
+    # fit the list, so the model is asked again.
+    answers = [
+        llm_message(VALID_REPORT | {"report_language": "Turkish"}),
+        llm_message(ANALYSIS_FIELDS | {"category": "E-posta ve Bildirim Sistemleri"}),
+        llm_message(ANALYSIS_FIELDS | {"category": "Notifications and Email"}),
+    ]
+    monkeypatch.setattr(llm_analyzer, "_call_ollama", lambda payload: answers.pop(0))
+
+    analysis = asyncio.run(llm_analyzer.analyze_with_llm(BUG))
+
+    assert analysis.category == "Notifications and Email"
+    assert answers == []
+
+
+def test_the_category_list_is_sent_as_the_allowed_values(monkeypatch) -> None:
+    payloads = []
+
+    def fake_call_ollama(payload):
+        payloads.append(payload)
+        return llm_message(VALID_REPORT if len(payloads) == 1 else ANALYSIS_FIELDS)
+
+    monkeypatch.setattr(llm_analyzer, "_call_ollama", fake_call_ollama)
+
+    asyncio.run(llm_analyzer.analyze_with_llm(BUG))
+
+    category = payloads[1]["format"]["properties"]["category"]
+    assert category["enum"] == list(llm_analyzer.BUG_CATEGORIES)
