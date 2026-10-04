@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -141,4 +142,19 @@ def test_bug_analysis_explains_llm_errors(monkeypatch) -> None:
     assert response.status_code == 503
     assert response.json() == {
         "detail": "The LLM could not analyze this bug: Could not connect to Ollama."
+    }
+
+
+@pytest.mark.parametrize("field", ["steps_to_reproduce", "expected_result"])
+def test_bug_analysis_rejects_fields_with_only_spaces(monkeypatch, field) -> None:
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        raise AssertionError("LLM should not be called")
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+
+    response = client.post("/bugs/analyze", data={**VALID_BUG, field: "   \n  "})
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": f"Missing required values: {field.replace('_', ' ')}."
     }

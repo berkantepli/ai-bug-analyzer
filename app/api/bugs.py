@@ -19,11 +19,6 @@ from app.services.batch_analyzer import (
     parse_bug_spreadsheet,
 )
 from app.services.excel_values import map_priority, map_severity
-from app.services.readability import (
-    field_length_error,
-    identical_fields_error,
-    readability_error,
-)
 
 import asyncio
 
@@ -115,6 +110,21 @@ def get_batch_progress(batch_id: str):
     return progress
 
 
+def to_bug_report(values: dict[str, str]) -> BugReportCreate:
+    """Build the LLM input from form or Excel values; one step per line."""
+    return BugReportCreate(
+        title=values["title"],
+        description=values["description"],
+        steps_to_reproduce=[
+            step.strip()
+            for step in values["steps_to_reproduce"].splitlines()
+            if step.strip()
+        ],
+        expected_result=values["expected_result"],
+        actual_result=values["actual_result"],
+    )
+
+
 async def _analyze_unless_stopped(
     bug: BugReportCreate, stopped: asyncio.Event
 ) -> Optional[BugAnalysis]:
@@ -172,17 +182,7 @@ async def process_batch_record(
     stopped = batch_state["stopped"]
 
     try:
-        bug = BugReportCreate(
-            title=values["title"],
-            description=values["description"],
-            steps_to_reproduce=[
-                step.strip()
-                for step in values["steps_to_reproduce"].splitlines()
-                if step.strip()
-            ],
-            expected_result=values["expected_result"],
-            actual_result=values["actual_result"],
-        )
+        bug = to_bug_report(values)
 
         async with semaphore:
             # Once Ollama is unreachable, the remaining bugs are not sent:
@@ -248,25 +248,14 @@ async def analyze_bug(
         "expected_result": expected_result,
         "actual_result": actual_result,
     }
-    error = (
-        field_length_error(values)
-        or readability_error(values)
-        or identical_fields_error(values)
-    )
+    # Same checks as an Excel row, including fields made only of spaces.
+    error = build_record(0, values)["error"]
     if error:
         raise HTTPException(status_code=422, detail=error)
 
     await _validate_screenshots(screenshots)
 
-    bug = BugReportCreate(
-        title=title,
-        description=description,
-        steps_to_reproduce=[
-            step.strip() for step in steps_to_reproduce.splitlines() if step.strip()
-        ],
-        expected_result=expected_result,
-        actual_result=actual_result,
-    )
+    bug = to_bug_report(values)
 
     try:
         return await analyze_with_llm(
