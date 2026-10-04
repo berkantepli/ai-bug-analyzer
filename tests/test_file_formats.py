@@ -136,3 +136,18 @@ def test_csv_blank_lines_do_not_count_towards_the_row_limit(monkeypatch) -> None
     response = post("bugs.csv", content.encode())
 
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        ("sep=;\n" + ";".join(HEADER) + "\n" + ";".join(LOGIN) + "\n").encode(),
+        ("\t".join(HEADER) + "\n" + "\t".join(LOGIN) + "\n").encode("utf-16"),
+    ],
+    ids=["Excel separator line", "UTF-16"],
+)
+def test_csv_exports_from_excel_are_read(content) -> None:
+    response = post("bugs.csv", content)
+
+    assert response.status_code == 200
+    assert response.json()["bugs"][0]["bug"]["title"] == "Login fails"

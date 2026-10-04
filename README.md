@@ -71,7 +71,7 @@ While the service is being checked or is unavailable, the analyze buttons are di
 ## Excel and CSV format
 
 - The file must contain **a single sheet**; only the active sheet is read.
-- CSV files may use commas, semicolons or tabs, in UTF-8 or Windows Turkish (cp1254) encoding.
+- CSV files may use commas, semicolons or tabs, in UTF-8, UTF-16 or Windows Turkish (cp1254) encoding; a `sep=;` first line written by Excel is understood.
 - Hidden rows, including rows hidden by a filter, are skipped; the number of skipped rows is shown above the results.
 - Password-protected files cannot be read; remove the password first.
 - Limits: at most **5 MB**, **2000 rows with data** in the sheet (empty formatted rows below the data are ignored) and **500 bug records**.

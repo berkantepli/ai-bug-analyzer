@@ -160,23 +160,39 @@ PASSWORD_PROTECTED_ERROR = (
 )
 
 
+# Excel writes "sep=;" as the first line of some CSV files to name the
+# delimiter; Excel hides the line when it opens the file.
+SEPARATOR_LINE = re.compile(r"sep=(.)\r?\n", re.IGNORECASE)
+
+
 def _csv_rows(content: bytes) -> Iterator[tuple[object, ...]]:
     """Read a CSV export, guessing the encoding and the delimiter."""
-    for encoding in ("utf-8-sig", "cp1254"):
-        try:
-            text = content.decode(encoding)
-            break
-        except UnicodeDecodeError:
-            continue
+    # UTF-16 exports start with a byte order mark.
+    if content.startswith((b"\xff\xfe", b"\xfe\xff")):
+        text = content.decode("utf-16")
     else:
-        text = content.decode("latin-1")
+        for encoding in ("utf-8-sig", "cp1254"):
+            try:
+                text = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            text = content.decode("latin-1")
 
-    try:
-        dialect = csv.Sniffer().sniff(text[:5000], delimiters=",;\t|")
-    except csv.Error:
+    separator = SEPARATOR_LINE.match(text)
+    options = {}
+    if separator:
+        text = text[separator.end() :]
         dialect = csv.excel
+        options["delimiter"] = separator.group(1)
+    else:
+        try:
+            dialect = csv.Sniffer().sniff(text[:5000], delimiters=",;\t|")
+        except csv.Error:
+            dialect = csv.excel
 
-    return (tuple(row) for row in csv.reader(StringIO(text), dialect))
+    return (tuple(row) for row in csv.reader(StringIO(text), dialect, **options))
 
 
 def _read_rows(
