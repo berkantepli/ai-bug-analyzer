@@ -171,6 +171,11 @@ Actual Result:
 """.strip()
 
 
+# Both prompts put the fixed instructions first and the report last: Ollama
+# reuses the part of a prompt that matches an earlier one, so in a batch only
+# the report has to be read for each bug.
+
+
 def build_validity_prompt(bug: BugReportCreate) -> str:
     return f"""
 You are an experienced Software QA Engineer reviewing a bug report.
@@ -180,11 +185,11 @@ Return ONLY valid JSON with exactly these fields:
 - is_valid_bug_report
 - invalid_reason
 
+{VALIDITY_RULE}
+
 {UNTRUSTED_REPORT_NOTICE}
 
 {_report_text(bug)}
-
-{VALIDITY_RULE}
 """.strip()
 
 
@@ -241,10 +246,7 @@ The visual_evidence field must be null.
     return f"""
 You are an experienced Software QA Engineer analyzing a bug report.
 
-IMPORTANT: The report is written in {language}.
-Write all free-text values in {language}.
-
-Analyze the following bug report and return ONLY valid JSON.
+Analyze the bug report at the end of this message and return ONLY valid JSON.
 
 Do not return:
 - Markdown
@@ -252,10 +254,6 @@ Do not return:
 - Explanations outside JSON
 - Reasoning
 - Thinking process
-
-{UNTRUSTED_REPORT_NOTICE}
-
-{_report_text(bug)}
 
 Your analysis must contain exactly these fields:
 {screenshot_field}
@@ -353,8 +351,9 @@ specific scenario, not the overall bug severity.
 
 9. {screenshot_instruction}
 
-10. Language: write every free-text value in {language}, even
-    when the screenshot or quoted UI text is in another language.
+10. Language: write every free-text value in the language of the report,
+    named right before the report below, even when the screenshot or
+    quoted UI text is in another language.
     Quoted UI text may stay as it appears on screen.
     This applies to impact, possible_root_cause, missing_information,
     visual_evidence and the test scenario scenario, expected_result and
@@ -362,6 +361,13 @@ specific scenario, not the overall bug severity.
     Keep these values in English so they can be grouped across reports:
     severity, priority, category, and the test scenario type, priority
     and category.
+
+{UNTRUSTED_REPORT_NOTICE}
+
+IMPORTANT: The report is written in {language}.
+Write all free-text values in {language}.
+
+{_report_text(bug)}
 
 Return only the JSON object.
 """.strip()
