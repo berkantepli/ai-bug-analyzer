@@ -2729,10 +2729,10 @@ async function exportReport(filtered = false) {
     }
 }
 
-// With batch filters on, the user chooses between the filtered bugs
-// and all bugs; otherwise the export starts right away.
+// A batch result always offers the filtered bugs and all bugs; without
+// filters the filtered option shows 0 and cannot be chosen.
 exportButton.addEventListener("click", () => {
-    if (activeMode !== "batch" || !batchFilters || !batchFilters.isFiltering()) {
+    if (activeMode !== "batch" || !batchFilters) {
         exportReport();
         return;
     }
@@ -2741,7 +2741,9 @@ exportButton.addEventListener("click", () => {
         return;
     }
 
-    const matchingCount = batchFilters.matchingBugs().length;
+    const matchingCount = batchFilters.isFiltering()
+        ? batchFilters.matchingBugs().length
+        : 0;
     const totalCount = savedResults.batch.data.bugs.length;
     exportFilteredButton.textContent = `Filtered bugs (${matchingCount})`;
     exportFilteredButton.disabled = matchingCount === 0;
