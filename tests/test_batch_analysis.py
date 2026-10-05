@@ -1,5 +1,6 @@
 import asyncio
 import re
+import unicodedata
 import zipfile
 from io import BytesIO
 
@@ -790,3 +791,31 @@ def test_no_duplicate_columns_without_repeated_headers(monkeypatch) -> None:
     response = client.post("/bugs/batch", files={"file": ("bugs.xlsx", content)})
 
     assert response.json()["duplicate_columns"] == []
+
+
+def test_decomposed_accents_are_read_like_composed_ones(monkeypatch) -> None:
+    # The same Turkish text with "ş" stored as "s" plus a separate accent,
+    # as in text copied from macOS or PDFs.
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+    composed = (
+        "Giriş başarısız",
+        "Şifre doğru ama giriş olmuyor",
+        "1. Giriş sayfasını aç",
+        "Panel açılır",
+        "Hata çıkıyor",
+    )
+    decomposed = tuple(unicodedata.normalize("NFD", value) for value in composed)
+
+    response = client.post(
+        "/bugs/batch",
+        files={"file": ("bugs.xlsx", excel_bytes([HEADER, composed, decomposed]))},
+    )
+
+    bugs = response.json()["bugs"]
+    assert [(bug["status"], bug["duplicate_of"]) for bug in bugs] == [
+        ("analyzed", None),
+        ("duplicate", 1),
+    ]

@@ -4,6 +4,7 @@ from io import BytesIO, StringIO
 from itertools import islice
 import re
 from typing import Iterable, Iterator, Optional
+import unicodedata
 
 from fastapi import HTTPException, UploadFile
 from openpyxl import load_workbook
@@ -378,6 +379,13 @@ async def _match_columns_with_llm(
 
 def build_record(row_number: int, values: dict[str, str]) -> dict:
     """Validate one bug's values; rows with an error are not sent to the LLM."""
+    # Letters such as "ş" or "ü" can be stored as a base letter plus a
+    # separate accent (text copied from macOS or PDFs). They look the same
+    # but would count as unreadable and would not match as duplicates.
+    values = {
+        field: unicodedata.normalize("NFC", value) for field, value in values.items()
+    }
+
     # Steps made only of list markers ("1.", "-") contain no step either.
     missing_values = [
         field.replace("_", " ")

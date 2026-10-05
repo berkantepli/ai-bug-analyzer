@@ -281,10 +281,12 @@ async def analyze_bug(
         "expected_result": expected_result,
         "actual_result": actual_result,
     }
-    # Same checks as an Excel row, including fields made only of spaces.
-    error = build_record(0, values)["error"]
-    if error:
-        raise HTTPException(status_code=422, detail=error)
+    # Same checks as an Excel row, including fields made only of spaces;
+    # the record holds the values with accents normalized.
+    record = build_record(0, values)
+    if record["error"]:
+        raise HTTPException(status_code=422, detail=record["error"])
+    values = record["values"]
 
     await _validate_screenshots(screenshots)
 
