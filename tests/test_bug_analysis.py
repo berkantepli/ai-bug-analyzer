@@ -1,3 +1,5 @@
+import unicodedata
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -251,3 +253,28 @@ def test_steps_with_only_markers_are_missing() -> None:
     assert response.json() == {
         "detail": "Missing required values: steps to reproduce."
     }
+
+
+def test_single_bug_with_decomposed_accents_is_analyzed(monkeypatch) -> None:
+    received = {}
+
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        received["title"] = bug.title
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+    bug = {
+        "title": "Giriş başarısız",
+        "description": "Şifre doğru ama giriş olmuyor",
+        "steps_to_reproduce": "Giriş sayfasını aç",
+        "expected_result": "Panel açılır",
+        "actual_result": "Hata çıkıyor",
+    }
+
+    response = client.post(
+        "/bugs/analyze",
+        data={key: unicodedata.normalize("NFD", value) for key, value in bug.items()},
+    )
+
+    assert response.status_code == 200
+    assert received["title"] == "Giriş başarısız"
