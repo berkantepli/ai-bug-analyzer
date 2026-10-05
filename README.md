@@ -8,6 +8,10 @@ You can analyze **one bug** (with screenshots if you have them) or a **whole Exc
 
 > **Note:** This is a learning and portfolio project. The AI's analysis is a suggestion; a QA engineer should review it before treating it as a confirmed finding.
 
+![Batch analysis of the six sample bugs: overview counts, severity, priority and category summary, and one card per bug](docs/images/batch-result.png)
+
+![Analysis of one bug: confidence, priority, category, impact, possible root cause and missing information](docs/images/bug-detail.png)
+
 ---
 
 ## Quick start
