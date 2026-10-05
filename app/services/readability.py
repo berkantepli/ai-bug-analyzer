@@ -84,9 +84,15 @@ PLACEHOLDER_WORDS = {
 }
 
 
+# Optional spreadsheet columns get the same limit: the retry and Excel
+# export requests accept no longer values, so a longer Severity, Priority
+# or Category would otherwise break them after the row was analyzed.
+OPTIONAL_FIELDS = ("severity", "priority", "category")
+
+
 def field_length_error(values: dict[str, str]) -> Optional[str]:
     """Return an error when a field is too long for the model to read."""
-    for field in COMPARED_FIELDS:
+    for field in (*COMPARED_FIELDS, *OPTIONAL_FIELDS):
         if len(values.get(field, "")) > MAX_FIELD_CHARS:
             name = field.replace("_", " ").capitalize()
             return f"{name} is longer than {MAX_FIELD_CHARS} characters."
