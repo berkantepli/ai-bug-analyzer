@@ -163,3 +163,41 @@ def test_filtered_batch_report_keeps_the_page_numbers() -> None:
     assert [row[0] for row in rows[1:]] == [2, 5]
     assert rows[2][15] == "Bug 2"
     assert list(book["Test Scenarios"].iter_rows(values_only=True))[1][0] == 2
+
+
+def test_rows_that_failed_for_a_too_long_value_can_be_exported() -> None:
+    # The 5000-character limit is for the analysis; the report keeps the
+    # row as it was read, cut only where an Excel cell ends.
+    bugs = [
+        {
+            "row": 2,
+            "status": "failed",
+            "bug": BUG | {"description": "x" * 6000},
+            "error": "Description is longer than 5000 characters.",
+        },
+        {
+            "row": 3,
+            "status": "failed",
+            "bug": BUG | {"category": "y" * 40000},
+            "error": "Category is longer than 5000 characters.",
+        },
+    ]
+
+    response = client.post("/bugs/export/batch", json={"bugs": bugs})
+
+    assert response.status_code == 200
+    rows = list(workbook(response)["Bugs"].iter_rows(values_only=True))
+    assert len(rows[1][4]) == 6000
+    assert rows[2][16] == "Category is longer than 5000 characters."
+
+
+def test_values_longer_than_an_excel_cell_are_cut() -> None:
+    bug = BUG | {"description": "z" * 40000}
+
+    response = client.post(
+        "/bugs/export/single", json={"bug": bug, "analysis": ANALYSIS}
+    )
+
+    values = dict(workbook(response)["Bug Analysis"].iter_rows(values_only=True))
+    assert len(values["Description"]) == 32767
+    assert values["Description"].endswith("…")

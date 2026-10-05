@@ -439,13 +439,26 @@ def _only_known_fields(values: dict[str, str]) -> dict[str, str]:
     unknown = set(values) - set(SPREADSHEET_FIELDS)
     if unknown:
         raise ValueError(f"unknown fields: {', '.join(sorted(unknown))}")
+    return values
+
+
+def _analyzable_length(values: dict[str, str]) -> dict[str, str]:
     if any(len(value) > MAX_FIELD_CHARS for value in values.values()):
         raise ValueError(f"values must be at most {MAX_FIELD_CHARS} characters")
     return values
 
 
-# Bug values sent back by the page, from an earlier response.
-BugValues = Annotated[dict[str, str], AfterValidator(_only_known_fields)]
+# Bug values sent back by the page, from an earlier response, to be
+# analyzed again: as long as the analysis accepts.
+BugValues = Annotated[
+    dict[str, str],
+    AfterValidator(_only_known_fields),
+    AfterValidator(_analyzable_length),
+]
+
+# Bug values for a report: a row that failed because a value was too long
+# still belongs in the report, so the analysis limit does not apply.
+ReportBugValues = Annotated[dict[str, str], AfterValidator(_only_known_fields)]
 
 
 class RetryBug(BaseModel):
@@ -491,7 +504,7 @@ def _xlsx_response(content: bytes, name: str, exported_at: datetime) -> Response
 
 
 class SingleExportRequest(BaseModel):
-    bug: BugValues
+    bug: ReportBugValues
     analysis: BugAnalysis
 
 
@@ -508,7 +521,7 @@ class ExportedBug(BaseModel):
     number: Optional[int] = Field(default=None, ge=1)
     row: int
     status: Literal["analyzed", "failed", "duplicate", "not_analyzed"]
-    bug: BugValues
+    bug: ReportBugValues
     analysis: Optional[BugAnalysis] = None
     error: Optional[str] = Field(default=None, max_length=2000)
     duplicate_of: Optional[int] = None

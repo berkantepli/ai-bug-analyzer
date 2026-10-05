@@ -39,11 +39,19 @@ SCENARIO_COLUMNS = (
 )
 
 
+# The most characters an Excel cell holds; a longer value (possible in a
+# CSV file) is cut so the report still opens.
+EXCEL_CELL_MAX_CHARS = 32767
+
+
 def _text(value: object) -> object:
     """Cell value: numbers stay numbers, text loses characters Excel rejects."""
     if value is None or isinstance(value, (int, float)):
         return value
-    return ILLEGAL_CHARACTERS_RE.sub("", str(value))
+    text = ILLEGAL_CHARACTERS_RE.sub("", str(value))
+    if len(text) > EXCEL_CELL_MAX_CHARS:
+        text = text[: EXCEL_CELL_MAX_CHARS - 1] + "…"
+    return text
 
 
 def _set(sheet: Worksheet, row: int, column: int, value: object):
