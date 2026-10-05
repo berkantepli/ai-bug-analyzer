@@ -2185,6 +2185,13 @@ Retry Button
 }
 /* Small screens; after all other rules so it overrides them. */
 @media (max-width: 680px) {
+    /* The Export button wraps below the heading on the left, so its menu
+       opens to the right instead of off the left edge of the screen. */
+    .export-menu {
+        right: auto;
+        left: 0;
+    }
+
     /* Text below 16px makes iOS zoom into the field on focus. */
     input,
     textarea {
