@@ -1138,7 +1138,17 @@ function formatError(error) {
     return String(error);
 }
 
+// Confidence arrives as 0.0–1.0 and is shown as a percentage, as in
+// the README and the Excel report.
+function formatConfidence(value) {
+    return typeof value === "number" ? `${Math.round(value * 100)}%` : value;
+}
+
 function formatAnalysisValue(key, value) {
+    if (key === "confidence") {
+        return formatConfidence(value) ?? "—";
+    }
+
     if (key === "missing_information" && Array.isArray(value) && value.length === 0) {
         return "No missing information identified.";
     }
@@ -1238,12 +1248,7 @@ function renderAnalysis(data) {
         const confidenceBadge = document.createElement("span");
         confidenceBadge.className = "confidence-badge";
 
-        const confidenceValue =
-            typeof confidence === "number"
-                ? `${Math.round(confidence * 100)}%`
-                : confidence;
-
-        confidenceBadge.textContent = `Confidence: ${confidenceValue}`;
+        confidenceBadge.textContent = `Confidence: ${formatConfidence(confidence)}`;
 
         confidenceBadge.setAttribute(
             "data-tooltip",
