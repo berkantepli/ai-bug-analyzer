@@ -14,6 +14,12 @@ const visualEvidenceValue = document.getElementById("visualEvidenceValue");
 const resultHeading = document.getElementById("resultHeading");
 const exportButton = document.getElementById("exportButton");
 const exportError = document.getElementById("exportError");
+const exportMenu = document.getElementById("exportMenu");
+const exportFilteredButton = document.getElementById("exportFilteredButton");
+const exportAllButton = document.getElementById("exportAllButton");
+
+// Filters of the batch result on screen; null when none is shown.
+let batchFilters = null;
 
 const errorCard = document.getElementById("errorCard");
 const errorMessage = document.getElementById("errorMessage");
@@ -1150,6 +1156,8 @@ function clearResults() {
     resultHeading.textContent = "Analysis Result";
     exportButton.hidden = true;
     exportError.hidden = true;
+    exportMenu.hidden = true;
+    batchFilters = null;
 
     visualEvidenceSection.hidden = true;
     visualEvidenceValue.textContent = "";
@@ -1822,9 +1830,35 @@ function renderBatchResults(data) {
         });
     };
 
+    const isFiltering = () => Boolean(filters.status) ||
+        ["severity", "priority", "category"].some(key => filters[key].size);
+
+    const statusLabels = {
+        analyzed: "Analyzed",
+        failed: "Failed",
+        duplicate: "Duplicates",
+        not_analyzed: "Not analyzed"
+    };
+
+    // Written to the Summary sheet of a filtered export.
+    const describeFilters = () => [
+        ...(filters.status ? [`Status: ${statusLabels[filters.status]}`] : []),
+        ...[["Severity", "severity"], ["Priority", "priority"], ["Category", "category"]]
+            .filter(([, key]) => filters[key].size)
+            .map(([labelText, key]) => `${labelText}: ${[...filters[key]].join(", ")}`)
+    ].join("; ");
+
+    batchFilters = {
+        isFiltering,
+        describe: describeFilters,
+        // Bugs with their page numbers, which Duplicate Of refers to.
+        matchingBugs: () => data.bugs
+            .map((bug, index) => ({ bug, number: index + 1 }))
+            .filter(({ bug }) => matchesFilters(bug))
+    };
+
     applyFilters = () => {
-        const isFiltering = Boolean(filters.status) ||
-            ["severity", "priority", "category"].some(key => filters[key].size);
+        const filtering = isFiltering();
         let shownCount = 0;
 
         bugCards.forEach(({ bug, card }) => {
@@ -1844,7 +1878,8 @@ function renderBatchResults(data) {
             }
         });
 
-        filterStatus.hidden = !isFiltering;
+        filterStatus.hidden = !filtering;
+        exportMenu.hidden = true;
         filterStatusText.textContent = shownCount
             ? `Showing ${shownCount} of ${data.bugs.length} bugs`
             : "No bugs match the selected filters.";
@@ -2617,29 +2652,46 @@ function downloadName(response, fallback) {
     return match ? match[1] : fallback;
 }
 
-exportButton.addEventListener("click", async () => {
+function batchExportBody(saved, entries, filtered) {
+    return {
+        source_name: saved.data.source_name || null,
+        ...(filtered
+            ? { filters: batchFilters.describe(), total_bugs: saved.data.bugs.length }
+            : {}),
+        bugs: entries.map(({ bug, number }) => ({
+            number,
+            row: bug.row,
+            status: bug.status,
+            bug: bug.bug,
+            analysis: bug.analysis,
+            error: bug.error,
+            duplicate_of: bug.duplicate_of
+        }))
+    };
+}
+
+async function exportReport(filtered = false) {
     const mode = activeMode;
     const saved = savedResults[mode];
     if (!saved || saved.type !== "result") {
         return;
     }
 
-    const request = mode === "single"
-        ? { url: "/bugs/export/single", body: { bug: saved.bug, analysis: saved.data } }
-        : {
-            url: "/bugs/export/batch",
-            body: {
-                source_name: saved.data.source_name || null,
-                bugs: saved.data.bugs.map(bug => ({
-                    row: bug.row,
-                    status: bug.status,
-                    bug: bug.bug,
-                    analysis: bug.analysis,
-                    error: bug.error,
-                    duplicate_of: bug.duplicate_of
-                }))
-            }
+    let request;
+    if (mode === "single") {
+        request = {
+            url: "/bugs/export/single",
+            body: { bug: saved.bug, analysis: saved.data }
         };
+    } else {
+        const entries = filtered
+            ? batchFilters.matchingBugs()
+            : saved.data.bugs.map((bug, index) => ({ bug, number: index + 1 }));
+        request = {
+            url: "/bugs/export/batch",
+            body: batchExportBody(saved, entries, filtered)
+        };
+    }
 
     exportButton.disabled = true;
     exportError.hidden = true;
@@ -2674,5 +2726,49 @@ exportButton.addEventListener("click", async () => {
         exportError.hidden = false;
     } finally {
         exportButton.disabled = false;
+    }
+}
+
+// With batch filters on, the user chooses between the filtered bugs
+// and all bugs; otherwise the export starts right away.
+exportButton.addEventListener("click", () => {
+    if (activeMode !== "batch" || !batchFilters || !batchFilters.isFiltering()) {
+        exportReport();
+        return;
+    }
+    if (!exportMenu.hidden) {
+        exportMenu.hidden = true;
+        return;
+    }
+
+    const matchingCount = batchFilters.matchingBugs().length;
+    const totalCount = savedResults.batch.data.bugs.length;
+    exportFilteredButton.textContent = `Filtered bugs (${matchingCount})`;
+    exportFilteredButton.disabled = matchingCount === 0;
+    exportAllButton.textContent = `All bugs (${totalCount})`;
+    exportMenu.hidden = false;
+    (matchingCount ? exportFilteredButton : exportAllButton).focus();
+});
+
+exportFilteredButton.addEventListener("click", () => {
+    exportMenu.hidden = true;
+    exportReport(true);
+});
+
+exportAllButton.addEventListener("click", () => {
+    exportMenu.hidden = true;
+    exportReport();
+});
+
+document.addEventListener("click", event => {
+    if (!exportMenu.hidden && !event.target.closest(".export-menu-wrapper")) {
+        exportMenu.hidden = true;
+    }
+});
+
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !exportMenu.hidden) {
+        exportMenu.hidden = true;
+        exportButton.focus();
     }
 });

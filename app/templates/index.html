@@ -232,9 +232,15 @@
 
                 <div class="result-card-header">
                     <h2 id="resultHeading">Analysis Result</h2>
-                    <button id="exportButton" class="export-button" type="button" hidden>
-                        ⬇ Export Excel
-                    </button>
+                    <div class="export-menu-wrapper">
+                        <button id="exportButton" class="export-button" type="button" hidden>
+                            ⬇ Export Excel
+                        </button>
+                        <div id="exportMenu" class="export-menu" role="menu" hidden>
+                            <button id="exportFilteredButton" type="button" role="menuitem"></button>
+                            <button id="exportAllButton" type="button" role="menuitem"></button>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="exportError" class="export-error" role="alert" hidden></div>

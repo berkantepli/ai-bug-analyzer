@@ -502,6 +502,8 @@ def export_single(export: SingleExportRequest) -> Response:
 
 
 class ExportedBug(BaseModel):
+    # The bug's number on the page; a filtered export skips numbers.
+    number: Optional[int] = Field(default=None, ge=1)
     row: int
     status: Literal["analyzed", "failed", "duplicate", "not_analyzed"]
     bug: BugValues
@@ -513,16 +515,23 @@ class ExportedBug(BaseModel):
 class BatchExportRequest(BaseModel):
     source_name: Optional[str] = Field(default=None, max_length=255)
     bugs: list[ExportedBug] = Field(min_length=1, max_length=MAX_BUG_RECORDS)
+    # Set when only the bugs matching the page filters are exported.
+    filters: Optional[str] = Field(default=None, max_length=2000)
+    total_bugs: Optional[int] = Field(default=None, ge=1, le=MAX_BUG_RECORDS)
 
 
 @router.post("/export/batch")
 def export_batch(export: BatchExportRequest) -> Response:
-    """Excel report of a batch result shown on the page, all bugs included."""
+    """Excel report of a batch result shown on the page: all bugs, or the
+    ones matching the page filters."""
     exported_at = datetime.now()
     content = batch_report(
         [item.model_dump() | {"analysis": item.analysis} for item in export.bugs],
         export.source_name,
         exported_at,
+        filters=export.filters,
+        total_bugs=export.total_bugs,
     )
     stem = Path(export.source_name).stem if export.source_name else "batch"
-    return _xlsx_response(content, f"{stem}-analysis", exported_at)
+    suffix = "-filtered" if export.filters else ""
+    return _xlsx_response(content, f"{stem}-analysis{suffix}", exported_at)

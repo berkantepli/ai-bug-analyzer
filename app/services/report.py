@@ -164,13 +164,16 @@ def batch_report(
     bugs: list[dict],
     source_name: Optional[str],
     exported_at: datetime,
+    filters: Optional[str] = None,
+    total_bugs: Optional[int] = None,
 ) -> bytes:
-    """bugs: the batch result items (row, status, bug, analysis, error,
-    duplicate_of), in the order shown on the page."""
+    """bugs: the batch result items (number, row, status, bug, analysis,
+    error, duplicate_of), in the order shown on the page. filters describes
+    the page filters when only the matching bugs are exported."""
     workbook = Workbook()
     summary = workbook.active
     summary.title = "Summary"
-    _batch_summary(summary, bugs, source_name, exported_at)
+    _batch_summary(summary, bugs, source_name, exported_at, filters, total_bugs)
 
     sheet = workbook.create_sheet("Bugs")
     is_csv = (source_name or "").lower().endswith(".csv")
@@ -195,7 +198,7 @@ def batch_report(
         ("Error", 45),
     ]
     rows = []
-    for number, item in enumerate(bugs, start=1):
+    for number, item in _numbered_bugs(bugs):
         values = item["bug"]
         analysis: Optional[BugAnalysis] = item["analysis"]
         rows.append(
@@ -238,7 +241,7 @@ def batch_report(
         [("Bug", 7), ("Bug Title", 30), *SCENARIO_COLUMNS],
         (
             [number, item["bug"].get("title", ""), *values]
-            for number, item in enumerate(bugs, start=1)
+            for number, item in _numbered_bugs(bugs)
             if item["analysis"]
             for values in _scenario_values(item["analysis"])
         ),
@@ -247,11 +250,19 @@ def batch_report(
     return _save(workbook)
 
 
+def _numbered_bugs(bugs: list[dict]) -> Iterable[tuple[int, dict]]:
+    """The page number of each bug, which Duplicate Of refers to."""
+    for index, item in enumerate(bugs, start=1):
+        yield item.get("number") or index, item
+
+
 def _batch_summary(
     sheet: Worksheet,
     bugs: list[dict],
     source_name: Optional[str],
     exported_at: datetime,
+    filters: Optional[str],
+    total_bugs: Optional[int],
 ) -> None:
     sheet.column_dimensions["A"].width = 26
     sheet.column_dimensions["B"].width = 40
@@ -263,6 +274,14 @@ def _batch_summary(
         ("Batch Analysis Report", None),
         ("Source file", source_name or "—"),
         ("Exported", exported_at.strftime("%Y-%m-%d %H:%M")),
+        *(
+            [
+                ("Filters", filters),
+                ("Exported bugs", f"{len(bugs)} of {total_bugs or len(bugs)}"),
+            ]
+            if filters
+            else []
+        ),
         ("", None),
         ("Overview", None),
         ("Bugs", len(bugs)),

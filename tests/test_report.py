@@ -136,3 +136,30 @@ def test_csv_batch_report_names_the_file_row() -> None:
     )
 
     assert workbook(response)["Bugs"]["B1"].value == "File Row"
+
+
+def test_filtered_batch_report_keeps_the_page_numbers() -> None:
+    bugs = [
+        {"number": 2, "row": 3, "status": "analyzed", "bug": BUG, "analysis": ANALYSIS},
+        {"number": 5, "row": 6, "status": "duplicate", "bug": BUG, "duplicate_of": 2},
+    ]
+
+    response = client.post(
+        "/bugs/export/batch",
+        json={
+            "source_name": "bugs.xlsx",
+            "bugs": bugs,
+            "filters": "Severity: HIGH",
+            "total_bugs": 9,
+        },
+    )
+
+    assert 'filename="bugs-analysis-filtered-' in response.headers["content-disposition"]
+    book = workbook(response)
+    summary = dict(row for row in book["Summary"].iter_rows(values_only=True) if row[0])
+    assert summary["Filters"] == "Severity: HIGH"
+    assert summary["Exported bugs"] == "2 of 9"
+    rows = list(book["Bugs"].iter_rows(values_only=True))
+    assert [row[0] for row in rows[1:]] == [2, 5]
+    assert rows[2][15] == "Bug 2"
+    assert list(book["Test Scenarios"].iter_rows(values_only=True))[1][0] == 2
