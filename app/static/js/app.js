@@ -1644,11 +1644,14 @@ function renderBatchResults(data) {
     const overview = document.createElement("div");
     overview.className = "batch-summary";
 
+    const duplicateCount = data.bugs.filter(isDuplicateBug).length;
+
     const overviewFields = [
         ["Bugs", data.bugs.length, null],
         ["Analyzed", analyses.length, "analyzed"],
         ["Failed", data.bugs.filter(isFailedBug).length, "failed"],
-        ["Duplicates", data.bugs.filter(isDuplicateBug).length, "duplicate"],
+        // Shown only when there are any, like Not analyzed.
+        ...(duplicateCount ? [["Duplicates", duplicateCount, "duplicate"]] : []),
         ...(notAnalyzedCount
             ? [["Not analyzed", notAnalyzedCount, "not_analyzed"]]
             : [])
