@@ -80,9 +80,11 @@ For each bug:
 
 The AI picks the category from this list, in English for reports in any language: Authentication, Authorization, User Interface, Forms and Input, Navigation, Search, Checkout and Payment, File Upload and Download, Notifications and Email, Data and Storage, API and Integration, Reporting and Export, Performance, Stability and Crashes, Security, Accessibility, Localization, Compatibility, Settings and Configuration, and Other. A Category column in your file is used as written instead.
 
-A batch result also shows a summary: how many bugs were analyzed, failed or repeated, and how they split by severity, priority and category.
+A batch result also shows a summary: how many bugs were analyzed and failed (and repeated or not analyzed, when there are any), and how they split by severity, priority and category.
 
-Click **⬇ Export Excel** to download the result as an `.xlsx` report.
+**Filter a batch result** by clicking the summary: a count such as **Failed** shows only those bugs, and severity, priority and category values narrow the list further. Click **Clear filters** to see all bugs again.
+
+Click **⬇ Export Excel** to download the result as an `.xlsx` report. For a batch, choose **Filtered bugs** to export only the bugs you are looking at (the report lists the filters used) or **All bugs** for the whole file.
 
 ---
 
@@ -93,7 +95,9 @@ Click **⬇ Export Excel** to download the result as an `.xlsx` report.
 - **Screenshots of another page** do not block the analysis; the mismatch is explained and confidence is lowered.
 - **In a batch, one bad row never stops the rest.** Problem rows are marked **FAILED** with the reason; hover over the badge to read it. Repeated bugs are marked **DUPLICATE OF BUG N** and are not analyzed twice.
 - **If Ollama stops during a batch,** the remaining bugs are marked **NOT ANALYZED**. When Ollama is back, the **Retry** button analyzes only those, without uploading the file again.
+- **If the AI gives an unusable answer twice,** the bug is marked **FAILED** and the **Retry** button can send it again too. Rows that failed for another reason, such as an empty field, fail again until the file is fixed.
 - **One thing at a time.** Ollama handles one request at a time. Starting a single bug while a batch runs (or the other way round) shows a warning that it will wait.
+- **Light or dark.** The switch at the top right changes the theme, and the browser remembers your choice.
 - **Results live in the page.** Clear cancels a running analysis, and leaving the page asks for confirmation first. Export to Excel to keep a result.
 
 ---
@@ -201,6 +205,9 @@ tests/                       # pytest suite
 | `GET` | `/bugs/activity` | Whether an analysis is running |
 | `POST` | `/bugs/export/single` | Excel report of a single bug result |
 | `POST` | `/bugs/export/batch` | Excel report of a batch result |
+| `GET` | `/health` | Whether the app is running |
+| `GET` | `/health/ollama` | Whether Ollama is reachable and the model is installed |
+| `GET` | `/health/analysis` | Whether the analysis service is ready |
 | `GET` | `/health/analysis/diagnose` | Step-by-step service diagnosis |
 
 ---
