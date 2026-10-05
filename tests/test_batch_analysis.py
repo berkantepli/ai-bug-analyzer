@@ -819,3 +819,26 @@ def test_decomposed_accents_are_read_like_composed_ones(monkeypatch) -> None:
         ("analyzed", None),
         ("duplicate", 1),
     ]
+
+
+def test_too_long_optional_column_fails_the_row(monkeypatch) -> None:
+    # Retry and Excel export accept at most 5000 characters per value.
+    async def fake_analyze_with_llm(bug, screenshots=None):
+        return FAKE_ANALYSIS
+
+    monkeypatch.setattr("app.api.bugs.analyze_with_llm", fake_analyze_with_llm)
+    row = ("Login fails", "Cannot sign in", "1. Login", "Dashboard", "Error")
+
+    response = client.post(
+        "/bugs/batch",
+        files={
+            "file": (
+                "bugs.xlsx",
+                excel_bytes([HEADER + ("Category",), row + ("Checkout " * 700,)]),
+            )
+        },
+    )
+
+    bug = response.json()["bugs"][0]
+    assert bug["status"] == "failed"
+    assert bug["error"] == "Category is longer than 5000 characters."
