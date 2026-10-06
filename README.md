@@ -14,11 +14,17 @@ You can analyze **one bug** (with screenshots if you have them) or a **whole Exc
 
 ![Analysis of one bug report: confidence, severity, priority, category, impact, possible root cause and missing information](docs/images/single-result.png)
 
+![Suggested test scenarios for the bug, each with a scenario, expected result, purpose and priority](docs/images/test-scenarios.png)
+
 ### Batch Analysis
 
 ![Batch analysis of the six sample bugs: overview counts, severity, priority and category summary, and one card per bug](docs/images/batch-result.png)
 
 ![One bug card opened in the batch result: confidence, priority, category, impact, possible root cause and missing information](docs/images/bug-detail.png)
+
+### Service Diagnosis
+
+![The service diagnosis checking the application, Ollama, the required model and a real inference call](docs/images/service-diagnosis.png)
 
 ---
 
