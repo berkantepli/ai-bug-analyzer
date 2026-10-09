@@ -220,4 +220,4 @@ tests/                       # pytest suite
 
 ## License
 
-Released under the [MIT License](LICENSE).
+Released under the [MIT License](LICENSE). © 2026 Berk Antepli
