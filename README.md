@@ -220,4 +220,4 @@ tests/                       # pytest suite
 
 ## License
 
-Personal learning and portfolio project.
+Released under the [MIT License](LICENSE).
